@@ -1,0 +1,12 @@
+name: traktShiny
+title: traktShiny
+username:
+account: tomcopple
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 2627435
+bundleId: 3454887
+url: https://tomcopple.shinyapps.io/traktShiny/
+when: 1596117786.70808
+asMultiple: FALSE
+asStatic: FALSE
