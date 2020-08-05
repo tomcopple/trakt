@@ -1,2 +1,3 @@
 *.csv
 traktHistory.csv
+.httr-oauth

@@ -17,6 +17,7 @@ options(shiny.autoreload = TRUE)
 # write_csv(ratings, "ratingsTemp.csv")
 # ratings <- read_csv("ratingsTemp.csv")
 
+source('setTrakt.R')
 source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
@@ -60,7 +61,8 @@ ui <- material_page(
                         input_id = "chooseYear",
                         label = "Select year:",
                         color = "green",
-                        choices = c("All time", seq.int(from = year(max(history$date)), 
+                        choices = c("All time", "Last 30 days",
+                                    seq.int(from = year(max(history$date)), 
                                                         to = year(min(history$date))))
                     )
                 )
@@ -154,6 +156,10 @@ server <- function(input, output, session) {
             values$minDate <- as_date(min(top10data$date))
             values$maxDate <- as_date(max(top10data$date))
             
+        } else if (chooseYear == 'Last 30 days') {
+            values$minDate <- today() - days(30)
+            values$maxDate <- today()
+            top10data <- filter(values$history, date >= values$minDate)
         } else {
             top10data <- filter(values$history, year(date) == chooseYear)
             values$minDate <- dmy(str_c("01-01-", chooseYear))
