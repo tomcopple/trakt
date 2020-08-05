@@ -51,7 +51,8 @@ getTraktHistory <- function(refresh = TRUE) {
     } else {
         
         dropbox <- readRDS('dropbox.rds')
-        history <- rdrop2::drop_read_csv(file = 'R/trakt/traktHistory.csv') %>% 
+        history <- rdrop2::drop_read_csv(file = 'R/trakt/traktHistory.csv', 
+                                         dtoken = dropbox) %>% 
             as_tibble()
         
     }

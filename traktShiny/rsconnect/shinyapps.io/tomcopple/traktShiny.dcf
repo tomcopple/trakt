@@ -5,8 +5,8 @@ account: tomcopple
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 2627435
-bundleId: 3454887
+bundleId: 3477571
 url: https://tomcopple.shinyapps.io/traktShiny/
-when: 1596117786.70808
+when: 1596626867.96465
 asMultiple: FALSE
 asStatic: FALSE

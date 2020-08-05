@@ -42,7 +42,8 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
     } else {
         
         dropbox <- readRDS('dropbox.rds')
-        images <- rdrop2::drop_read_csv(file = 'R/trakt/images.csv') %>% 
+        images <- rdrop2::drop_read_csv(file = 'R/trakt/images.csv',
+                                        dtoken = dropbox) %>% 
             as_tibble()
     }
     

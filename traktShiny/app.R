@@ -3,10 +3,13 @@ library(tidyverse);library(lubridate);library(jsonlite)
 library(httr);library(RColorBrewer);library(magrittr)
 library(googlesheets);library(zoo);library(forcats);library(rdrop2)
 
-dropbox <- rdrop2::drop_auth()
-saveRDS(dropbox, 'dropbox.rds')
+# dropbox <- rdrop2::drop_auth()
+# saveRDS(dropbox, 'dropbox.rds')
+print('Getting Dropbox')
+dropbox <- readRDS('dropbox.rds')
+print('Got Dropbox')
 
-options(shiny.autoreload = TRUE)
+# options(shiny.autoreload = TRUE)
 
 
 # options(shiny.trace = TRUE)
