@@ -26,8 +26,8 @@ source('getTraktHistory.R')
 source('getBanners.R')
 
 ratings <- getMyRatings()
-history <- getTraktHistory(refresh = FALSE)
-images <- getBanners(refresh = FALSE)
+history <- getTraktHistory(refresh = TRUE)
+images <- getBanners(refresh = TRUE)
 
 showList <- history %>% 
     distinct(show, title) %>%
