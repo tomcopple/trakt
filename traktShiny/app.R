@@ -11,7 +11,7 @@ print('Got Dropbox')
 
 # options(shiny.autoreload = TRUE)
 
-
+readRenviron(".Renviron")
 # options(shiny.trace = TRUE)
 # Slightly different code for working locally; comment out before publishing to shiny
 # setwd("traktShiny")
@@ -27,7 +27,7 @@ source('getBanners.R')
 
 ratings <- getMyRatings()
 history <- getTraktHistory(refresh = TRUE)
-images <- getBanners(refresh = TRUE)
+# images <- getBanners(refresh = TRUE)
 
 showList <- history %>% 
     distinct(show, title) %>%
