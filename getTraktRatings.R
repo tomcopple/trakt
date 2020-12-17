@@ -8,9 +8,10 @@ getMyRatings <- function(env = .GlobalEnv) {
     baseurl <- "https://api-v2launch.trakt.tv/users/"
     call <- "/ratings/episodes"
 
-    # Run setTrakt.R to get credentials
-    source("setTrakt.R")
-
+    # Credentials set in Renviron
+    traktUser <- Sys.getenv("TRAKT_USER")
+    traktApi <- Sys.getenv('TRAKT_API')
+    
     url <- paste0(baseurl, traktUser, call)
     
     # Set info for GET request. I don't think ratings requires a pages argument. 

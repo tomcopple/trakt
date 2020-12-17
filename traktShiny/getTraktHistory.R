@@ -10,8 +10,9 @@ getTraktHistory <- function(refresh = TRUE) {
         call <- "/history/episodes?limit=100000"
         
         # Run setTrakt.R to get credentials (NB From environmental vars)
-        source("setTrakt.R")
-
+        traktUser <- Sys.getenv("TRAKT_USER")
+        traktApi <- Sys.getenv('TRAKT_API')
+        
         url <- paste0(baseurl, traktUser, call)
         
         # Set info for GET request. 
@@ -39,13 +40,15 @@ getTraktHistory <- function(refresh = TRUE) {
             mutate(date = ymd_hms(date)) %>% 
             as_tibble()
         
+        write_csv(history, str_c(lubridate::today(), '-traktHistory.csv'))
         write_csv(history, 'traktHistory.csv')
         
         
         ## Dropbox authentication and save
-        dropbox <- readRDS('dropbox.rds')
-        rdrop2::drop_upload(file = 'traktHistory.csv',
+        dropbox <- readRDS('traktShiny/dropbox.rds')
+        rdrop2::drop_upload(file = str_c(lubridate::today(), '-traktHistory.csv'),
                             path = "R/trakt", dtoken = dropbox)
+        rdrop2::drop_upload(file = 'traktHistory.csv', path = 'R/trakt', dtoken = dropbox)
         
         
     } else {
