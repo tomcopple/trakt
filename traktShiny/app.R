@@ -27,7 +27,7 @@ source('getBanners.R')
 
 ratings <- getMyRatings()
 history <- getTraktHistory(refresh = TRUE)
-# images <- getBanners(refresh = TRUE)
+images <- getBanners(refresh = F)
 
 showList <- history %>% 
     distinct(show, title) %>%
@@ -73,7 +73,8 @@ ui <- material_page(
             material_column(
                 width = 9, 
                 material_card(title = "", plotlyOutput("plotlyTime", height = "100%")),
-                material_card(title = "", plotlyOutput("plotlyBar", height = "100%"))
+                material_card(title = "", plotlyOutput("plotlyBar", height = "100%")),
+                material_card(title = '', plotlyOutput('plotlyRat',height = "100%"))
             )
         )
     ),
@@ -155,24 +156,23 @@ server <- function(input, output, session) {
         print(str_c("Selecting ", chooseYear))
         
         if (chooseYear == 'All time') {
-            top10data <- values$history
-            values$minDate <- as_date(min(top10data$date))
-            values$maxDate <- as_date(max(top10data$date))
+            values$filtered <- values$history
+            values$minDate <- as_date(min(values$filtered$date))
+            values$maxDate <- as_date(max(values$filtered$date))
             
         } else if (chooseYear == 'Last 30 days') {
             values$minDate <- today() - days(30)
             values$maxDate <- today()
-            top10data <- filter(values$history, date >= values$minDate)
+            values$filtered <- filter(values$history, date >= values$minDate)
         } else {
-            top10data <- filter(values$history, year(date) == chooseYear)
+            values$filtered <- filter(values$history, year(date) == chooseYear)
             values$minDate <- dmy(str_c("01-01-", chooseYear))
             values$maxDate <- dmy(str_c("31-12-", chooseYear))
         }
         
         ## Get top ten shows for the time period
-        
-        values$top10 <- top10data %>% count(show, sort = T) %>% head(10) %>% pull('show')
-        values$top10data <- top10data %>% 
+        values$top10 <- values$filtered %>% count(show, sort = T) %>% head(10) %>% pull('show')
+        values$top10data <- values$filtered %>% 
             filter(show %in% values$top10) %>% 
             mutate(date = as_date(date)) %>% 
             select(date, show)
@@ -234,6 +234,36 @@ server <- function(input, output, session) {
                    margin = list(l = 120, r = 40))
     })
     
+    output$plotlyRat <- renderPlotly({
+        
+        ## Filter data for shows with more than 3 ratings then show top 10
+        topRat <- values$filtered %>% 
+            inner_join(values$ratings, by = c('show', 'season', 'episode')) %>% 
+            group_by(show) %>% 
+            filter(rating > 0, !is.na(rating)) %>% 
+            filter(n() >= 3) %>% 
+            summarise(avRat = mean(rating), n = n()) %>% 
+            ungroup() %>% 
+            arrange(desc(avRat)) %>% 
+            head(10) %>% 
+            arrange(avRat) %>% 
+            mutate(show = forcats::fct_inorder(show)) %>% 
+            group_by(show)
+        
+        plot_ly(data = topRat, x = ~avRat, y = ~show, 
+                    color = ~show, type = 'bar',
+                    text = ~round(avRat, 1), textposition = 'outside', 
+                    orientation = 'h', colors = 'Spectral', 
+                    hovertext = ~str_c(show, " (", n, "): <br>", round(avRat, 1)), 
+                    hoverinfo = 'text') %>% 
+            layout(showlegend = FALSE, bargap = 0.5, 
+                   xaxis = list(title = '', zeroline = FALSE),
+                   yaxis = list(title = ''),
+                   margin = list(l = 120, r = 40))
+            
+        # browser()
+    })
+    
     
     output$bannerImage <- renderUI({
         
@@ -244,7 +274,7 @@ server <- function(input, output, session) {
         # Some images don't seem to work...
         print(str_c("Getting banner image for ", chooseShow))
         showSlug <- values$ratings %>% 
-            filter(Show == chooseShow) %>% 
+            filter(show == chooseShow) %>% 
             distinct(slug) %>% 
             pull(slug)
         print(showSlug)
@@ -260,48 +290,48 @@ server <- function(input, output, session) {
             chooseShow <- gsub("_shinymaterialdropdownspace_", " ", input$chooseShow)
             
             showRatings <- values$ratings %>% 
-                filter(Show == chooseShow) %>% 
-                mutate(Season = as.factor(Season), Rating = as.integer(Rating),
-                       Episode = as.integer(Episode)) %>% 
-                arrange(Season, Episode)
+                filter(show == chooseShow) %>% 
+                mutate(season = as.factor(season), rating = as.integer(rating),
+                       episode = as.integer(episode)) %>% 
+                arrange(season, episode)
             
             # Plot graph
             pGraph <- plot_ly(type = "scatter", mode = "markers") %>% 
-                layout(title = paste("Ratings for", unique(showRatings$Show)),
+                layout(title = paste("Ratings for", unique(showRatings$show)),
                        xaxis = list(linecolor = "#898989",
                                     type = "linear"))
             
             # Add traces individually by season
-            for (i in unique(showRatings$Season)) {
+            for (i in unique(showRatings$season)) {
                 pGraph <- pGraph %>% 
                     add_trace(
-                        data = filter(showRatings, Season == i),
-                        y = ~Rating,
-                        x = ~Episode,
-                        color = ~Season, 
+                        data = filter(showRatings, season == i),
+                        y = ~rating,
+                        x = ~episode,
+                        color = ~season, 
                         type = "scatter", 
                         mode = "markers",
                         text = ~paste0(
-                            Title, "<br>", "s", 
-                            ifelse(as.numeric(Season) < 10, paste0("0", Season), Season),
+                            title, "<br>", "s", 
+                            ifelse(as.numeric(season) < 10, paste0("0", season), season),
                             "e", 
-                            ifelse(Episode < 10, paste0("0", Episode), Episode)), 
+                            ifelse(episode < 10, paste0("0", episode), episode)), 
                         hoverinfo = ~"text",
                         legendgroup = i,
                         showlegend = TRUE
                     )
                 
                 # Only want to add smoother if more than one episode per season
-                if (nrow(filter(showRatings, Season == i)) > 1) {
+                if (nrow(filter(showRatings, season == i)) > 1) {
                     pGraph <- pGraph %>% 
                         add_lines(
-                            data = filter(showRatings, Season == i),
-                            y = ~fitted(loess(Rating~Episode, span = 9)),
-                            x = ~Episode,
-                            color = ~Season,
+                            data = filter(showRatings, season == i),
+                            y = ~fitted(loess(rating~episode, span = 9)),
+                            x = ~episode,
+                            color = ~season,
                             line = list(smoothing = 0.8,
                                         shape = "spline"),
-                            text = ~paste("Season", Season), hoverinfo = ~"text",
+                            text = ~paste("Season", season), hoverinfo = ~"text",
                             showlegend = FALSE,
                             legendgroup = i
                             
@@ -318,14 +348,14 @@ server <- function(input, output, session) {
             chooseShow <- gsub("_shinymaterialdropdownspace_", " ", input$chooseShow)
             
             avRatings <- values$ratings %>% 
-                filter(Show == chooseShow) %>% 
-                group_by(Season) %>% 
-                summarise(avRating = round(mean(Rating), 1)) %>% 
-                arrange(Season)
+                filter(show == chooseShow) %>% 
+                group_by(season) %>% 
+                summarise(avRating = round(mean(rating), 1)) %>% 
+                arrange(season)
             
-            plot_ly(data = avRatings, x = ~avRating, y = ~Season,
+            plot_ly(data = avRatings, x = ~avRating, y = ~season,
                     type = "bar", orientation = "h",
-                    color = ~as.factor(Season),
+                    color = ~as.factor(season),
                     hoverinfo = "none"
             ) %>% 
                 layout(showlegend = FALSE,
@@ -334,7 +364,7 @@ server <- function(input, output, session) {
                                     fixedrange = FALSE),
                        annotations = list(
                            x = ~avRating, 
-                           y = ~Season, 
+                           y = ~season, 
                            text = ~avRating, 
                            showarrow = FALSE, 
                            bgcolor = "white", 

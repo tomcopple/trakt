@@ -6,8 +6,8 @@ getMyRatings <- function() {
     call <- "/ratings/episodes"
     
     # Run setTrakt.R to get credentials
-    source("setTrakt.R")
-
+    traktUser <- Sys.getenv("TRAKT_USER")
+    traktApi <- Sys.getenv('TRAKT_API')
     url <- paste0(baseurl, traktUser, call)
     
     # Set info for GET request. 
@@ -24,11 +24,11 @@ getMyRatings <- function() {
     
     ratings <- response %>% 
         select(
-            Rating = rating, 
-            Title = episode.title, 
-            Show = show.title, 
-            Season = episode.season, 
-            Episode = episode.number,
+            rating, 
+            title = episode.title, 
+            show = show.title, 
+            season = episode.season, 
+            episode = episode.number,
             slug = show.ids.slug,
             tvdb = show.ids.tvdb
         ) %>% 
@@ -38,17 +38,17 @@ getMyRatings <- function() {
     # Archer has some weird season/episode numbering, needs fixing. 
     ratings <- ratings %>% 
         mutate(
-            Episode = ifelse(Show == "Archer" & Season == 3,
-                             Episode + 3, Episode),
-            Episode = ifelse(Show == "Archer" & Season == 0,
-                             Episode - 3, Episode),
-            Season = ifelse(Show == "Archer" & Season == 0,
-                            3, Season)
+            spisode = ifelse(show == "Archer" & season == 3,
+                             episode + 3, episode),
+            episode = ifelse(show == "Archer" & season == 0,
+                             episode - 3, episode),
+            season = ifelse(show == "Archer" & season == 0,
+                            3, season)
         ) %>% 
-        filter(Season != 0)
+        filter(season != 0)
     
-    min <- count(ratings, Show) %>% filter(n > 2)
-    ratings <- filter(ratings, Show %in% min$Show)
+    min <- count(ratings, show) %>% filter(n > 2)
+    ratings <- filter(ratings, show %in% min$show)
 
         return(ratings)
 
