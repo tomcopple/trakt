@@ -5,8 +5,8 @@ library(tidyverse);library(xml2);library(lubridate)
 letFeed <- "https://letterboxd.com/tomcopple2/rss/"
 letNew <- httr::GET(letFeed) %>% 
     xml2::read_xml() %>% 
-    xml2::xml_find_all(xpath = 'channel') %>% 
-    xml2::xml_find_all(xpath = 'item') %>% 
+    xml2::xml_find_all(x = ., xpath = 'channel') %>% 
+    xml2::xml_find_all(x = ., xpath = 'item') %>% 
     xml2::as_list() %>% 
     map(unlist) %>% 
     map_df(bind_rows) %>% 
@@ -22,12 +22,6 @@ diary <- rdrop2::drop_read_csv(file = 'R/trakt/letterboxd/diary.csv',
     mutate(date = lubridate::ymd(date)) %>% 
     as_tibble()
 
-# letHist <- rdrop2::drop_read_csv(file = 'R/trakt/letterboxd/letHist.csv',
-#                                  dtoken = dropbox) %>% 
-#     as_tibble() %>% 
-#     mutate(date = lubridate::ymd(date))
-
-
 let <- bind_rows(letNew, diary) %>% distinct(title, date, rating) %>% 
     na.omit()
 # write_csv(let, here::here('tempData', 'letHist.csv'))
@@ -37,16 +31,16 @@ let <- bind_rows(letNew, diary) %>% distinct(title, date, rating) %>%
 let %>% mutate(year = year(date)) %>% group_by(year) %>% count()
 
 let %>% arrange(date) %>% 
+    group_by(date) %>% summarise(count = n(), .groups = 'drop') %>% 
     full_join(data.frame(date = seq.Date(from = min(let$date), to = today(),
                               by = 'days'))) %>% 
+    mutate(count = replace_na(count, 0)) %>% 
     arrange(date) %>% 
-    mutate(count = ifelse(is.na(title), 0, 1)) %>% 
     mutate(n = c(cumsum(count[1:364]), 
                  zoo::rollsum(x = count, k = 365, align = 'right'))) %>% 
-    # distinct(date,)
     ggplot(aes(x = date, y = n)) + geom_col(position = 'dodge')
 
-let %>% filter(year(date) == 2020) %>% mutate(rating = rating * 2) %>% count(rating) %>% 
+let %>% mutate(rating = rating * 2) %>% count(rating) %>% 
     ggplot(aes(x = rating, y = n)) + geom_col()
 
 let %>% 
@@ -77,4 +71,3 @@ diary %>%
 diary %>% 
     filter(str_detect(tags, 'home')) %>% 
     separate(tags, into = c('home', 'tag'), sep = ", ")
-
