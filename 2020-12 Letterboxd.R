@@ -38,6 +38,7 @@ let %>% arrange(date) %>%
     arrange(date) %>% 
     mutate(n = c(cumsum(count[1:364]), 
                  zoo::rollsum(x = count, k = 365, align = 'right'))) %>% 
+    filter(date >= "2011-12-31") %>% 
     ggplot(aes(x = date, y = n)) + geom_col(position = 'dodge')
 
 let %>% mutate(rating = rating * 2) %>% count(rating) %>% 
@@ -67,6 +68,77 @@ diary %>%
     ggplot(aes(x = date, y = n, group = series, color = series)) +
     geom_point(alpha = 0.1, size = 0.5) + 
     geom_smooth(se   = FALSE, size = 1)
+
+## out movies
+diary %>% 
+    filter(str_detect(tags, 'mv')) %>% 
+    mutate(tags = str_remove_all(tags, 'mv')) %>% 
+    separate(tags, into = c('1', '2', '3'), sep = ",") %>% 
+    select(-title, -rating) %>% 
+    gather(-date, key = series, value = tag) %>% 
+    select(-series) %>% 
+    mutate(tag = str_remove_all(tag, " ")) %>% 
+    filter(tag != "") %>% 
+    na.omit() %>% 
+    filter(! tag %in% c('maidavale', 'hampstead', 'bakerstreet', 'screenonthegreen')) %>% 
+    count(tag, sort = T)
+
+diary %>% 
+    filter(str_detect(tags, 'mv')) %>% 
+    mutate(everyman = str_detect(tags, 'everyman'),
+           odeon = str_detect(tags, 'odeon'),
+           vue = str_detect(tags, 'vue'),
+           curzon = str_detect(tags, 'curzon'),
+           barbican = str_detect(tags, 'barbican'),
+           bfi = str_detect(tags, 'bfi'),
+           picturehouse = str_detect(tags, 'picturehouse')) %>% 
+    mutate(others = ifelse(everyman|odeon|vue|curzon|barbican|bfi|picturehouse,
+                  FALSE, TRUE)) %>% 
+    full_join(data.frame(date = seq.Date(from = lubridate::ymd("2010-01-01"), 
+                                         to = today(),
+                                         by = 'days')))  %>% 
+    arrange(date) %>% 
+    select(-title, -rating, -tags) %>%
+    mutate(everyman = replace_na(everyman, 0),
+           odeon = replace_na(odeon, 0),
+           vue = replace_na(vue, 0),
+           curzon = replace_na(curzon, 0),
+           barbican = replace_na(barbican, 0),
+           bfi = replace_na(bfi, 0),
+           picturehouse = replace_na(picturehouse, 0),
+           others = replace_na(others, 0)) %>% 
+    group_by(date) %>% 
+    summarise(everyman = sum(everyman), odeon = sum(odeon),
+              vue = sum(vue), curzon = sum(curzon),
+              barbican = sum(barbican), bfi = sum(bfi),
+              picturehouse = sum(picturehouse), others = sum(others),
+              .groups = 'drop') %>%
+    mutate(nEveryman = c(cumsum(everyman[1:364]), 
+                     zoo::rollsum(x = everyman, k = 365, align = 'right')),
+           nOdeon = c(cumsum(odeon[1:364]), 
+                         zoo::rollsum(x = odeon, k = 365, align = 'right')),
+           nVue = c(cumsum(vue[1:364]), 
+                         zoo::rollsum(x = vue, k = 365, align = 'right')),
+           nCurzon = c(cumsum(curzon[1:364]), 
+                         zoo::rollsum(x = curzon, k = 365, align = 'right')),
+           nBarbican = c(cumsum(barbican[1:364]), 
+                         zoo::rollsum(x = barbican, k = 365, align = 'right')),
+           nBFI = c(cumsum(bfi[1:364]), 
+                         zoo::rollsum(x = bfi, k = 365, align = 'right')),
+           nPicturehouse = c(cumsum(picturehouse[1:364]), 
+                         zoo::rollsum(x = picturehouse, k = 365, align = 'right')),
+           nOthers = c(cumsum(others[1:364]), 
+                         zoo::rollsum(x = others, k = 365, align = 'right'))) %>% 
+    select(date, nEveryman:nOthers) %>% 
+    gather(-date, key = series, value = n) %>% 
+    filter(date >= "2011-01-01") %>% 
+    ggplot(aes(x = date, y = n, group = series, color = series)) +
+    geom_point(alpha = 0.1, size = 0.5) + 
+    geom_smooth(se   = FALSE, size = 1) +
+    scale_y_continuous(limits = c(0, 25))
+
+
+
 
 diary %>% 
     filter(str_detect(tags, 'home')) %>% 
