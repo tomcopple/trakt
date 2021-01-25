@@ -1,8 +1,8 @@
 ### Download letterboxd diary entries
 
-library(tidyverse);library(xml2);library(lubridate)
+library(tidyverse);library(xml2);library(lubridate);library(plotly)
 
-letFeed <- "https://letterboxd.com/tomcopple2/rss/"
+letFeed <- "https://letterboxd.com/tomcopple/rss/"
 letNew <- httr::GET(letFeed) %>% 
     xml2::read_xml() %>% 
     xml2::xml_find_all(x = ., xpath = 'channel') %>% 
@@ -50,8 +50,8 @@ let %>%
 diary %>%
     mutate(home = str_detect(tags, 'home'),
            out = str_detect(tags, 'out|mv')) %>% 
-    filter(date >= "2012-01-01") %>% 
-    full_join(data.frame(date = seq.Date(from = lubridate::ymd("2012-01-01"), 
+    # filter(date >= "2012-01-01") %>% 
+    full_join(data.frame(date = seq.Date(from = lubridate::ymd("2010-01-01"), 
                                          to = today(),
                                          by = 'days')))  %>% 
     arrange(date) %>% 
@@ -59,12 +59,13 @@ diary %>%
            out = replace_na(out, 0)) %>% 
     group_by(date) %>% 
     summarise(home = sum(home), out = sum(out), .groups = 'drop') %>%
-    mutate(nHome = c(cumsum(home[1:29]), 
-                 zoo::rollsum(x = home, k = 30, align = 'right')),
-           nOut = c(cumsum(out[1:29]),
-                    zoo::rollsum(x = out, k = 30, align = 'right'))) %>% 
+    mutate(nHome = c(cumsum(home[1:364]), 
+                 zoo::rollsum(x = home, k = 365, align = 'right')),
+           nOut = c(cumsum(out[1:364]),
+                    zoo::rollsum(x = out, k = 365, align = 'right'))) %>% 
     select(-home, -out) %>% 
     gather(-date, key = series, value = n) %>% 
+    filter(date >= "2011-01-01") %>% 
     ggplot(aes(x = date, y = n, group = series, color = series)) +
     geom_point(alpha = 0.1, size = 0.5) + 
     geom_smooth(se   = FALSE, size = 1)
@@ -139,7 +140,84 @@ diary %>%
 
 
 
+# Movies ------------------------------------------------------------------
 
-diary %>% 
+tags <- diary %>% 
+    filter(str_detect(tags, 'mv')) %>% 
+    mutate(tags = str_remove_all(tags, 'mv')) %>% 
+    mutate(tags = str_remove_all(tags, '^, '),
+           tags = str_remove_all(tags, ', $'),
+           tags = str_replace_all(tags, ', , ', ', ')) %>% 
+    separate(tags, into = c('1', '2'), sep = ", ") %>% 
+    select(-title, -rating) %>% 
+    gather(-date, key = key, value = value) %>% 
+    select(-key) %>% 
+    na.omit()
+
+top5 <- tags %>% 
+    filter(!value %in% c('maidavale', 'hampstead', 'bakerstreet', 'screenonthegreen')) %>% 
+    count(value, sort = T) %>% 
+    slice(1:5) %>% 
+    pull('value')
+    
+tags %>% 
+    filter(!value %in% c('maidavale', 'hampstead', 'bakerstreet', 'screenonthegreen')) %>% 
+    mutate(n = 1) %>% 
+    mutate(tags = forcats::fct_other(value, keep = top5, other_level = 'Others')) %>% 
+    select(-value) %>%
+    group_by(tags) %>% 
+    group_split() %>% 
+    map(~full_join(
+        x = .,
+        y = data.frame(date = seq.Date(from = min(tags$date),
+                                   to = today(), by = 'days'))
+    )) %>% 
+    map(arrange, date) %>% 
+    map(mutate, n = replace_na(n, 0)) %>% 
+    map(fill, tags, .direction = 'updown') %>% 
+    map_df(mutate, cumsum = c(n[1:364],
+                           zoo::rollsum(n, k = 365, align = 'right')))  %>% 
+    ggplot(aes(x = date, y = cumsum, group = tags, color = tags)) +
+    geom_point(alpha = 0.1, size = 0.5) + 
+    geom_smooth(se   = FALSE, size = 1) +
+    scale_y_continuous(limits = c(0, 25))
+
+
+# Home --------------------------------------------------------------------
+
+tags <- diary %>% 
     filter(str_detect(tags, 'home')) %>% 
-    separate(tags, into = c('home', 'tag'), sep = ", ")
+    mutate(tags = str_remove_all(tags, 'home')) %>% 
+    mutate(tags = str_remove_all(tags, '^, '),
+           tags = str_remove_all(tags, ', $')) %>% 
+    select(-title, -rating) %>% 
+    gather(-date, key = key, value = value) %>% 
+    select(-key) %>% 
+    na.omit()
+
+top5 <- tags %>% 
+    count(value, sort = T) %>% 
+    slice(1:5) %>% 
+    pull('value')
+
+tags %>% 
+    mutate(n = 1) %>% 
+    mutate(tags = forcats::fct_other(value, keep = top5, other_level = 'Others')) %>% 
+    # select(-value) %>%
+    group_by(tags) %>% 
+    group_split() %>% 
+    map(~full_join(
+        x = .,
+        y = data.frame(date = seq.Date(from = min(tags$date),
+                                       to = today(), by = 'days'))
+    )) %>% 
+    map(arrange, date) %>% 
+    map(mutate, n = replace_na(n, 0)) %>% 
+    map(fill, tags, .direction = 'updown') %>% 
+    map_df(mutate, cumsum = c(n[1:364],
+                              zoo::rollsum(n, k = 365, align = 'right')))  %>% 
+    filter(date >= "2011-01-01") %>% 
+    ggplot(aes(x = date, y = cumsum, group = tags, color = tags)) +
+    geom_point(alpha = 0.1, size = 0.5) + 
+    geom_smooth(se   = FALSE, size = 1) +
+    scale_y_continuous(limits = c(0, 25))
