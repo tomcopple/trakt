@@ -2,8 +2,8 @@
 title: "Letterboxd"
 output: 
   flexdashboard::flex_dashboard:
-    orientation: columns
-    vertical_layout: fill
+    orientation: rows
+    vertical_layout: scroll
 editor_options: 
   chunk_output_type: console
 ---
@@ -96,7 +96,9 @@ p <- plot_ly(plotData %>% filter(rewatch),
             x = ~date, y = ~rating, color = ~where, legendgroup = ~where,
             marker = list(size = 25), showlegend = FALSE,
           text = ~title, hoverinfo = 'text')
-p
+p %>% 
+  plotly::layout(xaxis = list(title = NA),
+                 yaxis = list(title = "Rating"))
 ```
 
 ### Chart C
