@@ -29,3 +29,4 @@ vignettes/*.pdf
 *.csv
 .DS_Store
 dropbox.rds
+Letterboxd.html

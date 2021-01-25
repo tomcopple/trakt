@@ -24,7 +24,7 @@ diary <- rdrop2::drop_read_csv(file = 'R/trakt/letterboxd/diary.csv') %>%
     arrange(desc(date))
                   
 ## And get any new films from the RSS feed
-letFeed <- httr::GET("https://letterboxd.com/tomcopple2/rss/") %>% 
+letFeed <- httr::GET("https://letterboxd.com/tomcopple/rss/") %>% 
     xml2::read_xml() %>% 
     xml2::xml_find_all(x = ., xpath = 'channel') %>% 
     xml2::xml_find_all(x = ., xpath = 'item') %>% 
@@ -68,7 +68,35 @@ Column {data-width=350}
 ### Chart B
 
 ```{r}
-
+plotData <- let %>% 
+  # filter(year(date) == 2010) %>%
+  arrange(desc(date)) %>% 
+  mutate(rating = rating * 2) %>%
+  mutate(where = case_when(
+    str_detect(tags, 'home') ~ "Home",
+    str_detect(tags, 'mv') ~ "Cinema",
+    str_detect(tags, 'plane') ~ "Plane",
+    TRUE ~ "Other"
+  )) %>% 
+  mutate(where = forcats::fct_infreq(where)) %>% 
+  group_by(title) %>% 
+  arrange(date) %>% 
+  mutate(n = row_number()) %>% 
+  ungroup() %>% 
+  mutate(rewatch = ifelse(
+    n == 1, TRUE, FALSE
+  ))
+p <- plot_ly(plotData %>% filter(rewatch), 
+        x = ~date, y = ~rating, type = 'scatter', mode = 'markers', 
+        opacity = 0.8,
+        color = ~where, legendgroup = ~where,
+          marker = list(size = 25),
+          text = ~title, hoverinfo = 'text') %>% 
+  add_trace(data = plotData %>% filter(!rewatch),opacity = 0.25,
+            x = ~date, y = ~rating, color = ~where, legendgroup = ~where,
+            marker = list(size = 25), showlegend = FALSE,
+          text = ~title, hoverinfo = 'text')
+p
 ```
 
 ### Chart C
