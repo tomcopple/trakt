@@ -45,7 +45,7 @@ let <- bind_rows(diary, letFeed) %>% arrange(desc(date))
 Column {data-width=650}
 -----------------------------------------------------------------------
 
-### Chart A
+### Rolling 12 months
 
 ```{r}
 let %>% 
@@ -65,7 +65,7 @@ let %>%
 Column {data-width=350}
 -----------------------------------------------------------------------
 
-### Chart B
+### Where
 
 ```{r}
 plotData <- let %>% 
@@ -76,6 +76,7 @@ plotData <- let %>%
     str_detect(tags, 'home') ~ "Home",
     str_detect(tags, 'mv') ~ "Cinema",
     str_detect(tags, 'plane') ~ "Plane",
+    tags == "" ~ "N/A",
     TRUE ~ "Other"
   )) %>% 
   mutate(where = forcats::fct_infreq(where)) %>% 
@@ -88,7 +89,7 @@ plotData <- let %>%
   ))
 p <- plot_ly(plotData %>% filter(rewatch), 
         x = ~date, y = ~rating, type = 'scatter', mode = 'markers', 
-        opacity = 0.8,
+        opacity = 0.6,
         color = ~where, legendgroup = ~where,
           marker = list(size = 25),
           text = ~title, hoverinfo = 'text') %>% 
