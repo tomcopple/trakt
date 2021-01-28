@@ -62,13 +62,16 @@ rv <- reactiveValues(let = let)
 observeEvent(eventExpr = input$apply,
              handlerExpr = {
                req(input$uploadFile) 
+               print(input$uploadFile$datapath)
+               
                newData <- read.csv(input$uploadFile$datapath) %>% 
                  select(title = Name, date = Watched.Date, rating = Rating, tags = Tags) %>% 
                  mutate(date = lubridate::ymd(date)) %>% 
                  arrange(desc(date))
                rv$let <- bind_rows(newData, rv$let %>% 
                                   anti_join(newData, by = c('title', 'date', 'rating')))
-               rdrop2::drop_upload(file = input$uploadFile$datapath,
+               file.rename(from = input$uploadFile$datapath, to = 'diary.csv')
+               rdrop2::drop_upload(file = 'diary.csv',
                                    path = 'R/trakt/letterboxd',
                                    mode = 'overwrite')
                
