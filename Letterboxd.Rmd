@@ -6,10 +6,12 @@ output:
     vertical_layout: scroll
 editor_options: 
   chunk_output_type: console
+runtime: shiny
 ---
 
+
 ```{r setup, include=FALSE}
-library(flexdashboard);library(tidyverse);library(lubridate)
+library(flexdashboard);library(tidyverse);library(lubridate);library(shiny)
 library(rdrop2);library(xml2);library(httr);library(plotly);library(zoo)
 
 ## Download diary.csv drom dropbox. NB KEEP THE NEXT TWO COMMENTED LINES
@@ -42,33 +44,72 @@ letFeed <- httr::GET("https://letterboxd.com/tomcopple/rss/") %>%
 let <- bind_rows(diary, letFeed) %>% arrange(desc(date))
 ```
 
-Roe {data-width=650}
+
+Sidebar {.sidebar data-width=250}
+-----------------------------------------------------------------------
+
+```{r}
+fileInput(inputId = 'uploadFile',
+          label = 'Upload new diary.csv file',
+          multiple = FALSE, 
+          accept = '.csv')
+actionButton(inputId = "apply", label = "Apply", icon = icon("play"))
+
+rv <- reactiveValues(let = let)
+
+# reactive({print(head(rv$let))})
+
+observeEvent(eventExpr = input$apply,
+             handlerExpr = {
+               req(input$uploadFile) 
+               newData <- read.csv(input$uploadFile$datapath) %>% 
+                 select(title = Name, date = Watched.Date, rating = Rating, tags = Tags) %>% 
+                 mutate(date = lubridate::ymd(date)) %>% 
+                 arrange(desc(date))
+               rv$let <- bind_rows(newData, rv$let %>% 
+                                  anti_join(newData, by = c('title', 'date', 'rating')))
+               rdrop2::drop_upload(file = input$uploadFile$datapath,
+                                   path = 'R/trakt/letterboxd',
+                                   mode = 'overwrite')
+               
+             }, ignoreNULL = FALSE)
+
+```
+
+
+12m roll {data-width=650}
 -----------------------------------------------------------------------
 
 ### Rolling 12 months
 
 ```{r}
-let %>% 
+renderPlotly({
+  rv$let %>% 
     arrange(date) %>% 
     group_by(date) %>% count() %>% ungroup() %>% 
     full_join(data.frame(date = seq.Date(
-        from = min(let$date), to = today(), by = 'days'
+        from = min(rv$let$date), to = today(), by = 'days'
     ))) %>% 
     arrange(date) %>% 
     mutate(n = replace_na(n, 0)) %>% 
     mutate(rollsum = c(cumsum(n[0:364]),
                        zoo::rollsum(n, k = 365, align = 'right'))) %>% 
     filter(date >= "2012-01-01") %>% 
-    plot_ly(x = ~date, y = ~rollsum, mode = "lines")
+    plot_ly(x = ~date, y = ~rollsum, mode = "lines") %>% 
+    plotly::layout(xaxis = list(title = NA),
+                   yaxis = list(title = "Films per year"))
+})
 ```
 
-Row 
+Chart 2: circles 
 -----------------------------------------------------------------------
 
 ### Where
 
 ```{r}
-plotData <- let %>% 
+renderPlotly({
+  plotData <- rv$let %>% 
+    # plotData <- let %>% 
   # filter(year(date) == 2010) %>%
   arrange(desc(date)) %>% 
   mutate(rating = rating * 2) %>%
@@ -78,7 +119,14 @@ plotData <- let %>%
     str_detect(tags, 'plane') ~ "Plane",
     tags == "" ~ "N/A",
     TRUE ~ "Other"
-  )) %>% 
+  )) %>%
+      mutate(tags = str_remove_all(tags, 'mv'),
+             tags = str_remove_all(tags, 'home'),
+             tags = str_remove_all(tags, '^, '),
+             tags = str_remove_all(tags, ', $'),
+             tags = str_replace_all(tags, ', , ', ', ')
+      ) %>% 
+      mutate(tags = str_to_sentence(tags)) %>% 
   mutate(where = forcats::fct_infreq(where)) %>% 
   group_by(title) %>% 
   arrange(date) %>% 
@@ -92,7 +140,7 @@ p <- plot_ly(plotData %>% filter(rewatch),
         opacity = 0.6,
         color = ~where, legendgroup = ~where,
           marker = list(size = 25),
-          text = ~title, hoverinfo = 'text') %>% 
+          text = ~str_c(title, '<br>', tags), hoverinfo = 'text') %>% 
   add_trace(data = plotData %>% filter(!rewatch),opacity = 0.25,
             x = ~date, y = ~rating, color = ~where, legendgroup = ~where,
             marker = list(size = 25), showlegend = FALSE,
@@ -100,6 +148,7 @@ p <- plot_ly(plotData %>% filter(rewatch),
 p %>% 
   plotly::layout(xaxis = list(title = NA),
                  yaxis = list(title = "Rating"))
+})
 ```
 
 Row
@@ -108,15 +157,16 @@ Row
 ### Cinema Top 5
 
 ```{r}
-tags <- let %>% 
+renderPlotly({
+  tags <- rv$let %>% 
     filter(str_detect(tags, 'mv')) %>% 
     mutate(tags = str_remove_all(tags, 'mv')) %>% 
     mutate(tags = str_remove_all(tags, '^, '),
            tags = str_remove_all(tags, ', $'),
            tags = str_replace_all(tags, ', , ', ', ')) %>% 
     separate(tags, into = c('1', '2'), sep = ", ") %>% 
-    select(-title, -rating) %>% 
-    gather(-date, key = key, value = value) %>% 
+    select(-rating) %>% 
+    gather(-date, -title, key = key, value = value) %>% 
       filter(!value %in% c('maidavale', 'hampstead', 'bakerstreet', 'screenonthegreen')) %>% 
   mutate(value = str_to_sentence(value)) %>% 
     select(-key) %>% 
@@ -130,8 +180,10 @@ top5 <- tags %>%
 mvData <- tags %>% 
   mutate(tags = forcats::fct_other(value, keep = top5, other_level = 'Others')) %>% 
   mutate(date = floor_date(date, unit = 'weeks')) %>% 
+  mutate(title = ifelse(tags == 'Others', str_c(title, '<br>', value),
+                        title)) %>% 
   select(-value) %>%
-  count(date, tags) %>% 
+  add_count(date, tags) %>% 
     group_by(tags) %>% 
     group_split() %>% 
     map(~full_join(
@@ -140,36 +192,39 @@ mvData <- tags %>%
                                    to = today(), by = 'weeks'))
     )) %>% 
     map(arrange, date) %>% 
-    map(mutate, n = replace_na(n, 0)) %>% 
+    map(mutate, n2 = replace_na(n, 0)) %>% 
     map(fill, tags, .direction = 'updown') %>% 
   # map(mutate, smooth = predict(loess(cumsum~as.numeric(date), .)))
-    map(mutate, cumsum = c(n[1:51],
-                           zoo::rollsum(n, k = 52, align = 'right'))) %>% 
+    map(mutate, cumsum = c(n2[1:51],
+                           zoo::rollsum(n2, k = 52, align = 'right'))) %>% 
   map_df(mutate, smooth = predict(loess(cumsum~as.numeric(date), span = 0.25))) %>% 
-  mutate(smooth = ifelse(smooth < 0, 0, smooth))
+  mutate(smooth = ifelse(smooth < 0, 0, smooth)) %>% 
+  mutate(cumsum = ifelse(is.na(title), NA, cumsum))
 
 plotly::plot_ly(mvData, x = ~date, type = 'scatter', y = ~cumsum, 
                 mode='markers', color = ~tags, legendgroup = ~tags,
-                marker = list(size = 2, opacity = 0.25), showlegend = FALSE) %>% 
-  plotly::add_lines(y = ~smooth, color = ~tags, color = ~tags,
+                marker = list(size = 4, opacity = 0.4), showlegend = FALSE,
+                text = ~ifelse(is.na(title), "", title), hoverinfo = 'text') %>% 
+  plotly::add_lines(y = ~smooth, color = ~tags, color = ~tags, mode = 'lines',
                     legendgroup = ~tags, line = list(shape = "spline"),
-                    showlegend = TRUE) %>% 
+                    showlegend = TRUE, hoverinfo= 'none') %>% 
   plotly::layout(yaxis = list(title = "Rolling 12 months", tick0 = 0),
                  xaxis = list(title = NA))
+})
 ```
 
 ### At home Top 5
 
 ```{r}
-tags <- let %>% 
+renderPlotly({
+  tags <- rv$let %>% 
     filter(str_detect(tags, 'home')) %>% 
     mutate(tags = str_remove_all(tags, 'home')) %>% 
     mutate(tags = str_remove_all(tags, '^, '),
            tags = str_remove_all(tags, ', $'),
            tags = str_replace_all(tags, ', , ', ', ')) %>% 
-    separate(tags, into = c('1', '2'), sep = ", ") %>% 
-    select(-title, -rating) %>% 
-    gather(-date, key = key, value = value) %>% 
+    select(-rating) %>% 
+    gather(-date, -title, key = key, value = value) %>% 
   mutate(value = str_to_sentence(value)) %>% 
     select(-key) %>% 
     na.omit()
@@ -182,8 +237,10 @@ top5 <- tags %>%
 homeData <- tags %>% 
   mutate(tags = forcats::fct_other(value, keep = top5, other_level = 'Others')) %>% 
   mutate(date = floor_date(date, unit = 'weeks')) %>% 
+   mutate(title = ifelse(tags == 'Others', str_c(title, '<br>', value),
+                        title)) %>% 
   select(-value) %>%
-  count(date, tags) %>% 
+  add_count(date, tags) %>% 
     group_by(tags) %>% 
     group_split() %>% 
     map(~full_join(
@@ -192,22 +249,25 @@ homeData <- tags %>%
                                    to = today(), by = 'weeks'))
     )) %>% 
     map(arrange, date) %>% 
-    map(mutate, n = replace_na(n, 0)) %>% 
+    map(mutate, n2 = replace_na(n, 0)) %>% 
     map(fill, tags, .direction = 'updown') %>% 
   # map(mutate, smooth = predict(loess(cumsum~as.numeric(date), .)))
-    map(mutate, cumsum = c(n[1:51],
-                           zoo::rollsum(n, k = 52, align = 'right'))) %>% 
+    map(mutate, cumsum = c(n2[1:51],
+                           zoo::rollsum(n2, k = 52, align = 'right'))) %>% 
   map_df(mutate, smooth = predict(loess(cumsum~as.numeric(date), span = 0.25))) %>% 
-  mutate(smooth = ifelse(smooth < 0, 0, smooth))
+  mutate(smooth = ifelse(smooth < 0, 0, smooth)) %>% 
+  mutate(cumsum = ifelse(is.na(title), NA, cumsum))
 
 plotly::plot_ly(homeData, x = ~date, type = 'scatter', y = ~cumsum, 
                 mode='markers', color = ~tags, legendgroup = ~tags,
-                marker = list(size = 2, opacity = 0.25), showlegend = FALSE) %>% 
+                marker = list(size = 4, opacity = 0.4), showlegend = FALSE,
+                text = ~ifelse(is.na(title), "", title), hoverinfo = 'text') %>% 
   plotly::add_lines(y = ~smooth, color = ~tags, color = ~tags, mode = 'lines',
                     legendgroup = ~tags, line = list(shape = "spline"),
-                    showlegend = TRUE) %>% 
+                    showlegend = TRUE, hoverinfo= 'none') %>% 
   plotly::layout(yaxis = list(title = "Rolling 12 months", tick0 = 0),
                  xaxis = list(title = NA))
+})
 ```
 
 
