@@ -87,7 +87,7 @@ observeEvent(eventExpr = input$apply,
 
 ```{r}
 renderPlotly({
-  rv$let %>% 
+  plot1 <- rv$let %>% 
     arrange(date) %>% 
     group_by(date) %>% count() %>% ungroup() %>% 
     full_join(data.frame(date = seq.Date(
@@ -97,10 +97,33 @@ renderPlotly({
     mutate(n = replace_na(n, 0)) %>% 
     mutate(rollsum = c(cumsum(n[0:364]),
                        zoo::rollsum(n, k = 365, align = 'right'))) %>% 
-    filter(date >= "2012-01-01") %>% 
-    plot_ly(x = ~date, y = ~rollsum, mode = "lines") %>% 
+    filter(date >= "2012-01-01")
+  
+  plot_ly() %>% 
+    plotly::add_bars(data = plot1 %>% 
+                       mutate(month = floor_date(date, unit = 'month')) %>% 
+                       count(month, wt = n),
+                     name = 'Monthly', x = ~month, y = ~n, 
+                     xaxis = 'x', yaxis = 'y', opacity = 0.5,
+                     text = ~str_c(format.Date(month, '%b-%y'), ': ', n),
+                     hoverinfo = 'text',
+                     marker = list(
+                       color = "#ffd166")
+                     ) %>% 
+    plotly::add_lines(data = plot1, name = "Rolling 12 months",
+                      x = ~date, y = ~rollsum,
+                      line = list(color = "#118ab2"),
+                      text = ~str_c(format.Date(date, '%d %b %y'), 
+                                    ': ', rollsum), hoverinfo = 'text',
+                      xaxis = 'x2', yaxis = 'y2') %>% 
     plotly::layout(xaxis = list(title = NA),
-                   yaxis = list(title = "Films per year"))
+                   xaxis2 = list(side = 'bottom', overlaying = 'x',
+                                 showticklabels = F),
+                   yaxis = list(title = NA, side = 'left',
+                                overlaying = F),
+                   yaxis2 = list(side = 'right', overlaying = 'y',
+                                 showticklabels = T),
+                   legend = list(orientation = 'h'))
 })
 ```
 
@@ -197,22 +220,23 @@ mvData <- tags %>%
     map(arrange, date) %>% 
     map(mutate, n2 = replace_na(n, 0)) %>% 
     map(fill, tags, .direction = 'updown') %>% 
-  # map(mutate, smooth = predict(loess(cumsum~as.numeric(date), .)))
+     map(nest, title) %>% 
     map(mutate, cumsum = c(n2[1:51],
                            zoo::rollsum(n2, k = 52, align = 'right'))) %>% 
-  map_df(mutate, smooth = predict(loess(cumsum~as.numeric(date), span = 0.25))) %>% 
-  mutate(smooth = ifelse(smooth < 0, 0, smooth)) %>% 
-  mutate(cumsum = ifelse(is.na(title), NA, cumsum))
+  map(mutate, smooth = predict(loess(cumsum~as.numeric(date), span = 0.25))) %>% 
+  map(unnest, data) %>% 
+  map(mutate, smooth = ifelse(smooth < 0, 0, smooth)) %>% 
+  map_df(mutate, cumsum = ifelse(is.na(title), NA, cumsum))
 
-plotly::plot_ly(mvData, x = ~date, type = 'scatter', y = ~cumsum, 
+plotly::plot_ly(mvData, x = ~as.Date(jitter(as.numeric(date), amount = 25)), type = 'scatter', y = ~cumsum, 
                 mode='markers', color = ~tags, legendgroup = ~tags,
                 marker = list(size = 4, opacity = 0.4), showlegend = FALSE,
                 text = ~ifelse(is.na(title), "", title), hoverinfo = 'text') %>% 
-  plotly::add_lines(y = ~smooth, color = ~tags, color = ~tags, mode = 'lines',
+  plotly::add_lines(y = ~smooth, x = ~date, color = ~tags, color = ~tags, mode = 'lines',
                     legendgroup = ~tags, line = list(shape = "spline"),
                     showlegend = TRUE, hoverinfo= 'none') %>% 
   plotly::layout(yaxis = list(title = "Rolling 12 months", tick0 = 0),
-                 xaxis = list(title = NA))
+                 xaxis = list(title = NA, type='date'))
 })
 ```
 
@@ -254,22 +278,23 @@ homeData <- tags %>%
     map(arrange, date) %>% 
     map(mutate, n2 = replace_na(n, 0)) %>% 
     map(fill, tags, .direction = 'updown') %>% 
-  # map(mutate, smooth = predict(loess(cumsum~as.numeric(date), .)))
+  map(nest, title) %>% 
     map(mutate, cumsum = c(n2[1:51],
                            zoo::rollsum(n2, k = 52, align = 'right'))) %>% 
-  map_df(mutate, smooth = predict(loess(cumsum~as.numeric(date), span = 0.25))) %>% 
-  mutate(smooth = ifelse(smooth < 0, 0, smooth)) %>% 
-  mutate(cumsum = ifelse(is.na(title), NA, cumsum))
+  map(mutate, smooth = predict(loess(cumsum~as.numeric(date), span = 0.25))) %>% 
+  map(unnest, data) %>% 
+  map(mutate, smooth = ifelse(smooth < 0, 0, smooth)) %>% 
+  map_df(mutate, cumsum = ifelse(is.na(title), NA, cumsum))
 
-plotly::plot_ly(homeData, x = ~date, type = 'scatter', y = ~cumsum, 
+plotly::plot_ly(homeData, x = ~as.Date(jitter(as.numeric(date), amount = 25)), type = 'scatter', y = ~cumsum, 
                 mode='markers', color = ~tags, legendgroup = ~tags,
                 marker = list(size = 4, opacity = 0.4), showlegend = FALSE,
                 text = ~ifelse(is.na(title), "", title), hoverinfo = 'text') %>% 
-  plotly::add_lines(y = ~smooth, color = ~tags, color = ~tags, mode = 'lines',
+  plotly::add_lines(y = ~smooth, x = ~date, color = ~tags, color = ~tags, mode = 'lines',
                     legendgroup = ~tags, line = list(shape = "spline"),
                     showlegend = TRUE, hoverinfo= 'none') %>% 
   plotly::layout(yaxis = list(title = "Rolling 12 months", tick0 = 0),
-                 xaxis = list(title = NA))
+                 xaxis = list(title = NA, type='date'))
 })
 ```
 
