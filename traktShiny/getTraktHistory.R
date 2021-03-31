@@ -5,6 +5,34 @@ getTraktHistory <- function(refresh = TRUE) {
     library(tidyverse);library(lubridate);library(stringr);library(httr);library(jsonlite);library(rdrop2)
     
     if (refresh) {
+        
+        ## Authorisation - need to go through Oauth to access private users
+        trakt_id <- Sys.getenv('TRAKTSHINY_ID')
+        trakt_secret <- Sys.getenv('TRAKTSHINY_SECRET')
+        traktUser <- Sys.getenv("TRAKT_USER")
+        traktApi <- Sys.getenv('TRAKT_API')
+        
+        # Option 1: Enter a code --------------------------------------------------
+        
+        ## This works in the Project, but won't work in Shiny
+        app <- oauth_app(appname = "traktShiny",
+                         key = trakt_id,
+                         secret = trakt_secret,
+                         redirect_uri = "urn:ietf:wg:oauth:2.0:oob")
+        
+        endpoint <- oauth_endpoint(
+            authorize = "https://trakt.tv/oauth/authorize",
+            access = "https://api.trakt.tv/oauth/token"
+        )
+        
+        
+        token <- oauth2.0_token(endpoint = endpoint,
+                                app = app,
+                                use_oob = TRUE
+        )
+        
+        accessCode <- token$credentials$access_token
+        
         # Create url
         baseurl <- "https://api-v2launch.trakt.tv/users/"
         call <- "/history/episodes?limit=100000"
@@ -13,12 +41,13 @@ getTraktHistory <- function(refresh = TRUE) {
         traktUser <- Sys.getenv("TRAKT_USER")
         traktApi <- Sys.getenv('TRAKT_API')
         
-        url <- paste0(baseurl, traktUser, call)
+        url <- paste0(baseurl, 'me', call)
         
         # Set info for GET request. 
-        headers <- httr::add_headers(.headers = c("trakt-api-key" = traktApi,
+        headers <- httr::add_headers(.headers = c("trakt-api-key" = trakt_id,
                                                   "Content-Type" = "application/json",
-                                                  "trakt-api-version" = 2))
+                                                  "trakt-api-version" = 2,
+                                                  "Authorization" = paste('Bearer', accessCode)))
         response <- httr::GET(url, headers)
         httr::stop_for_status(response)
         response <- httr::content(response, as = "text")

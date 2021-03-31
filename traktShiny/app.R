@@ -15,24 +15,23 @@ readRenviron(".Renviron")
 # options(shiny.trace = TRUE)
 # Slightly different code for working locally; comment out before publishing to shiny
 # setwd("traktShiny")
-# source("getMyRatings.R")
-# ratings <- getMyRatings()
-# write_csv(ratings, "ratingsTemp.csv")
-# ratings <- read_csv("ratingsTemp.csv")
 
-source('setTrakt.R')
 source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
 
+print('Getting ratings')
 ratings <- getMyRatings()
+print('Got ratings, getting history')
 history <- getTraktHistory(refresh = TRUE)
+print('Got history, getting banners')
 images <- getBanners(refresh = F)
+print('Got banners')
 
 showList <- history %>% 
     distinct(show, title) %>%
     count(show) %>% 
-    filter(n >= 3) %>% 
+    filter(n > 3) %>% 
     arrange(show) %>% 
     pull('show')
 
