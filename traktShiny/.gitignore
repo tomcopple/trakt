@@ -1,3 +1,4 @@
 *.csv
 traktHistory.csv
 .httr-oauth
+traktToken.rds

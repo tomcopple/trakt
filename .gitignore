@@ -30,3 +30,4 @@ vignettes/*.pdf
 .DS_Store
 dropbox.rds
 Letterboxd.html
+rsconnect
