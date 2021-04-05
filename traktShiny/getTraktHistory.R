@@ -69,6 +69,12 @@ getTraktHistory <- function(refresh = TRUE) {
             mutate(date = ymd_hms(date)) %>% 
             as_tibble()
         
+        ## Remove duplicate plays (i.e. anything marked played at the same date, same time)
+        history <- history %>% group_by(date) %>% filter(n() == 1) %>% ungroup()
+        
+        ## And just remove everything from August 30 2015
+        history <- history %>% filter(date(date) != '2015-08-30')
+        
         write_csv(history, str_c(lubridate::today(), '-traktHistory.csv'))
         write_csv(history, 'traktHistory.csv')
         
