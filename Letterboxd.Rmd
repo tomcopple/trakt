@@ -84,22 +84,37 @@ observeEvent(eventExpr = input$apply,
 
 ```{r}
 renderPlotly({
-  plot1 <- rv$let %>% 
+  # plot1 <- rv$let %>%
+    plot1 <- let %>%
+    select(date, tags) %>% 
+     mutate(where = case_when(
+       str_detect(tags, 'home') ~ "Home",
+       str_detect(tags, 'mv') ~ "Cinema",
+       TRUE ~ "Other"
+  )) %>% select(-tags) %>% 
     arrange(date) %>% 
-    group_by(date) %>% count() %>% ungroup() %>% 
+    group_by(date, where) %>% count() %>% ungroup() %>% 
+    spread(key = where, value = n, fill = 0) %>% 
+    mutate(Total = Cinema + Home + Other) %>% 
+    select(-Other) %>% 
+
     full_join(data.frame(date = seq.Date(
-        from = min(rv$let$date), to = today(), by = 'days'
+      from = min(let$date), to = today(), by = 'days'
+        # from = min(rv$let$date), to = today(), by = 'days'
     ))) %>% 
     arrange(date) %>% 
-    mutate(n = replace_na(n, 0)) %>% 
-    mutate(rollsum = c(cumsum(n[0:364]),
-                       zoo::rollsum(n, k = 365, align = 'right'))) %>% 
+      replace_na(list(Cinema = 0, Home = 0, Total = 0)) %>% 
+    mutate(
+      Cinema = c(cumsum(Cinema[0:364]), zoo::rollsum(Cinema, k = 365, align = 'right')),
+      Home = c(cumsum(Home[0:364]), zoo::rollsum(Home, k = 365, align = 'right')),
+      Total = c(cumsum(Total[0:364]), zoo::rollsum(Total, k = 365, align = 'right'))) %>% 
     filter(date >= "2012-01-01")
   
   plot_ly() %>% 
-    plotly::add_bars(data = plot1 %>% 
+    plotly::add_bars(data = let %>%
+                       filter(date >= "2012-01-01") %>% 
                        mutate(month = floor_date(date, unit = 'month')) %>% 
-                       count(month, wt = n),
+                       count(month),
                      name = 'Monthly', x = ~month, y = ~n, 
                      xaxis = 'x', yaxis = 'y', opacity = 0.5,
                      text = ~str_c(format.Date(month, '%b-%y'), ': ', n),
@@ -108,17 +123,33 @@ renderPlotly({
                        color = "#ffd166")
                      ) %>% 
     plotly::add_lines(data = plot1, name = "Rolling 12 months",
-                      x = ~date, y = ~rollsum,
+                      x = ~date, y = ~Total,
                       line = list(color = "#118ab2"),
-                      text = ~str_c(format.Date(date, '%d %b %y'), 
-                                    ': ', rollsum), hoverinfo = 'text',
-                      xaxis = 'x2', yaxis = 'y2') %>% 
+                      text = ~str_c(format.Date(date, '%d %b %y'),
+                                    ': ', Total), hoverinfo = 'text',
+                      xaxis = 'x2', yaxis = 'y2') %>%
+
+    plotly::add_lines(data = plot1, name = "Cinema",
+                      x = ~date, y = ~Cinema,
+                      line = list(color = "#06d6a0"),
+                      text = ~str_c(format.Date(date, '%d %b %y'),
+                                    ': ', Cinema), hoverinfo = 'text',
+                      xaxis = 'x2', yaxis = 'y2') %>%
+
+    plotly::add_lines(data = plot1, name = "Home",
+                      x = ~date, y = ~Home,
+                      line = list(color = "#ef476f"),
+                      text = ~str_c(format.Date(date, '%d %b %y'),
+                                    ': ', Home), hoverinfo = 'text',
+                      xaxis = 'x2', yaxis = 'y2') %>%
+
     plotly::layout(xaxis = list(title = NA),
                    xaxis2 = list(side = 'bottom', overlaying = 'x',
                                  showticklabels = F),
                    yaxis = list(title = NA, side = 'left',
                                 overlaying = F),
                    yaxis2 = list(side = 'right', overlaying = 'y',
+                                 range = c(0, max(plot1$Total)),
                                  showticklabels = T),
                    legend = list(orientation = 'h'))
 })
