@@ -26,13 +26,10 @@ diary <- rdrop2::drop_read_csv(file = 'R/trakt/letterboxd/diary.csv') %>%
     arrange(desc(date))
                   
 ## And get any new films from the RSS feed
-letFeed <- httr::GET("https://letterboxd.com/tomcopple/rss/") %>% 
-    xml2::read_xml() %>% 
-    xml2::xml_find_all(x = ., xpath = 'channel') %>% 
-    xml2::xml_find_all(x = ., xpath = 'item') %>% 
+letFeed <- xml2::read_xml("https://letterboxd.com/tomcopple/rss/") %>% 
+  xml2::xml_find_all('//item') %>% xml_child('letterboxd:filmTitle') 
     xml2::as_list() %>% 
-    map(unlist) %>% 
-    map_df(bind_rows) %>% 
+    map_df(unlist) %>% 
     select(title = filmTitle, date = watchedDate, rating = memberRating) %>% 
     mutate(date = lubridate::ymd(date),
            rating = as.numeric(rating), 
