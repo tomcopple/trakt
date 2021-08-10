@@ -16,6 +16,8 @@ readRenviron(".Renviron")
 # Slightly different code for working locally; comment out before publishing to shiny
 # setwd("traktShiny")
 
+
+source('traktShinyAuth.R')
 source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
