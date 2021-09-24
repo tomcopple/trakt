@@ -37,6 +37,9 @@ showList <- history %>%
     arrange(show) %>% 
     pull('show')
 
+
+# UI ----------------------------------------------------------------------
+
 ui <- material_page(
     
     # Application title
@@ -51,6 +54,7 @@ ui <- material_page(
         )
     ),
     
+    ### Main Page UI ----
     material_tab_content(
         tab_id = "main_page",
         tags$h2("Summary of recent plays"),
@@ -74,12 +78,21 @@ ui <- material_page(
             material_column(
                 width = 9, 
                 material_card(title = "", plotlyOutput("plotlyTime", height = "100%")),
-                material_card(title = "", plotlyOutput("plotlyBar", height = "100%")),
-                material_card(title = '', plotlyOutput('plotlyRat',height = "100%"))
+                material_card(title = "", 
+                              material_slider(
+                                  input_id = 'sliderBar', label = "", min_value = 1, max_value = 10, step_size = 1, initial_value = 1
+                              ),
+                              plotlyOutput("plotlyBar", height = "100%")),
+                material_card(title = '', 
+                              material_slider(
+                                  input_id = 'sliderRat', label = "", min_value = 1, max_value = 10, step_size = 1, initial_value = 1
+                              ),
+                              plotlyOutput('plotlyRat',height = "100%"))
             )
         )
     ),
     
+    ### Show Page UI ----
     material_tab_content(
         tab_id = "show_page",
         material_row(
@@ -121,6 +134,7 @@ ui <- material_page(
         )
     ),
     
+    ### Maintenance Page UI ----
     material_tab_content(
         tab_id = "maintenance",
         material_card(
@@ -128,6 +142,9 @@ ui <- material_page(
         )
     )
 )
+
+
+# Server ------------------------------------------------------------------
 
 server <- function(input, output, session) {
     
@@ -149,8 +166,7 @@ server <- function(input, output, session) {
         }
     })
     
-    ## Producer plays chart according to year
-    
+    ### Create filtered data.frame by year ----
     observeEvent(input$chooseYear, {
         
         chooseYear <- input$chooseYear
@@ -180,6 +196,7 @@ server <- function(input, output, session) {
         print(values$top10)
     })
     
+    ### Plotly time series area chart  ----
     output$plotlyTime <- renderPlotly({
         
         top10plays <- values$top10data %>% 
@@ -217,14 +234,25 @@ server <- function(input, output, session) {
                       
     })
     
+    ### Top 10 plays barchart ----
     output$plotlyBar <- renderPlotly({
         
         ## Just a horizontal bar showing totals
-        values$top10data %>% 
-            count(show, sort = T) %>% 
+        minSlice <- input$sliderBar * 10 - 9
+        maxSlice <- input$sliderBar * 10
+        
+        
+        
+        barData <- values$filtered %>% 
+            count(show) %>% 
+            # nest(data = c(id, title, season, episode, date, slug, tvdb)) %>% 
+            arrange(desc(n)) %>% 
+            slice(c(minSlice:maxSlice)) %>% 
+            # unnest(data) %>% 
             mutate(show = forcats::fct_inorder(show)) %>% 
-            group_by(show) %>% 
-            plot_ly(x = ~n, y = ~show, color = ~show, type = "bar",
+            mutate(show = forcats::fct_rev(show)) 
+        
+        plot_ly(barData, x = ~n, y = ~show, color = ~show, type = "bar",
                     text = ~n, textposition = "outside",
                     orientation = "h", colors = "Spectral",
                     hovertext = ~str_c(show, n, sep = ": <br>"), hoverinfo = "text"
@@ -235,7 +263,12 @@ server <- function(input, output, session) {
                    margin = list(l = 120, r = 40))
     })
     
+    
+    #### Main page ratings plot ---------
     output$plotlyRat <- renderPlotly({
+        
+        minSlice <- input$sliderRat * 10 - 9
+        maxSlice <- input$sliderRat * 10
         
         ## Filter data for shows with more than 3 ratings then show top 10
         topRat <- values$filtered %>% 
@@ -246,7 +279,7 @@ server <- function(input, output, session) {
             summarise(avRat = mean(rating), n = n()) %>% 
             ungroup() %>% 
             arrange(desc(avRat)) %>% 
-            head(10) %>% 
+            slice(c(minSlice:maxSlice)) %>% 
             arrange(avRat) %>% 
             mutate(show = forcats::fct_inorder(show)) %>% 
             group_by(show)
@@ -265,6 +298,9 @@ server <- function(input, output, session) {
         # browser()
     })
     
+
+# Show page charts --------------------------------------------------------
+
     
     output$bannerImage <- renderUI({
         
@@ -286,6 +322,8 @@ server <- function(input, output, session) {
         
     })
         
+    ### Show ratings plot ---- 
+    
         output$showPlot <- renderPlotly({
             
             chooseShow <- gsub("_shinymaterialdropdownspace_", " ", input$chooseShow)
