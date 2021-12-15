@@ -15,13 +15,15 @@ readRenviron(".Renviron")
 # options(shiny.trace = TRUE)
 # Slightly different code for working locally; comment out before publishing to shiny
 # setwd("traktShiny")
-
+# 
 
 source('traktShinyAuth.R')
 source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
 
+print("Authenticating Trakt")
+accessCode <- traktShinyAuth()
 print('Getting ratings')
 ratings <- getMyRatings()
 print('Got ratings, getting history')
