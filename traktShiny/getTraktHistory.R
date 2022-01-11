@@ -1,6 +1,6 @@
 ## Download all trakt scrobbles, and save local copy
 
-getTraktHistory <- function(refresh = TRUE) {
+getTraktHistory <- function(refresh = TRUE, accessCode) {
     
     library(tidyverse);library(lubridate);library(stringr);library(httr);library(jsonlite);library(rdrop2)
     
@@ -11,6 +11,9 @@ getTraktHistory <- function(refresh = TRUE) {
         call <- "/history/episodes?limit=100000"
         
         url <- paste0(baseurl, 'me', call)
+        
+        trakt_id <- Sys.getenv('TRAKTSHINY_ID')
+        
         
         # Set info for GET request. 
         headers <- httr::add_headers(.headers = c("trakt-api-key" = trakt_id,
@@ -49,7 +52,7 @@ getTraktHistory <- function(refresh = TRUE) {
         
         
         ## Dropbox authentication and save
-        dropbox <- readRDS('traktShiny/dropbox.rds')
+        dropbox <- readRDS('dropbox.rds')
         rdrop2::drop_upload(file = str_c(lubridate::today(), '-traktHistory.csv'),
                             path = "R/trakt", dtoken = dropbox)
         rdrop2::drop_upload(file = 'traktHistory.csv', path = 'R/trakt', dtoken = dropbox)

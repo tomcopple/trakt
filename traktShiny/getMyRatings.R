@@ -1,4 +1,4 @@
-getMyRatings <- function() {
+getMyRatings <- function(accessCode) {
     require(tidyverse);require(lubridate);require(jsonlite);require(httr)
     
     # Create url
@@ -6,6 +6,9 @@ getMyRatings <- function() {
     call <- "/ratings/episodes"
     
     url <- paste0(baseurl, 'tomcopple', call)
+    
+    trakt_id <- Sys.getenv('TRAKTSHINY_ID')
+    
     
     # Set info for GET request. 
     headers <- httr::add_headers(.headers = c("trakt-api-key" = trakt_id,

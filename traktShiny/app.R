@@ -14,22 +14,56 @@ print('Got Dropbox')
 readRenviron(".Renviron")
 # options(shiny.trace = TRUE)
 # Slightly different code for working locally; comment out before publishing to shiny
-# setwd("traktShiny")
-# 
+# if(str_detect(getwd(), 'Shiny', negate = T)) setwd('traktShiny')
 
-source('traktShinyAuth.R')
+getwd()
+
+
+print("Authenticating Trakt")
+# Environmental variables -------------------------------------------------
+trakt_id <- Sys.getenv('TRAKTSHINY_ID')
+print(str_c('trakt_id: ', trakt_id))
+trakt_secret <- Sys.getenv('TRAKTSHINY_SECRET')
+print(str_c('trakt_secret: ', trakt_secret))
+traktUser <- Sys.getenv("TRAKT_USER")
+print(str_c('traktUser: ', traktUser))
+traktApi <- Sys.getenv('TRAKT_API')
+print(str_c('traktApi: ', traktApi))
+
+### Get a token, don't need to do this every time?
+app <- oauth_app(
+    appname = "traktShiny",
+    key = trakt_id,
+    secret = trakt_secret,
+    redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
+)
+
+endpoint <- oauth_endpoint(authorize = "https://trakt.tv/oauth/authorize",
+                           access = "https://api.trakt.tv/oauth/token")
+
+
+token <- oauth2.0_token(endpoint = endpoint,
+                        app = app,
+                        use_oob = TRUE)
+
+if (token$credentials$expires_in < 700000) {
+    token$refresh()
+}
+
+accessCode <- token$credentials$access_token
+print(str_c('Access code: ', accessCode))
+
+
 source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
 
-print("Authenticating Trakt")
-accessCode <- traktShinyAuth()
 print('Getting ratings')
-ratings <- getMyRatings()
+ratings <- getMyRatings(accessCode)
 print('Got ratings, getting history')
-history <- getTraktHistory(refresh = TRUE)
+history <- getTraktHistory(refresh = TRUE, accessCode)
 print('Got history, getting banners')
-images <- getBanners(refresh = F)
+images <- getBanners(refresh = T)
 print('Got banners')
 
 showList <- history %>% 
@@ -160,8 +194,8 @@ server <- function(input, output, session) {
             material_spinner_show(session, 'showPlot')
             material_spinner_show(session, 'ratingsPlot')
             shiny::showNotification("Refreshing data, may take some time...", type = "default")
-            values$ratings <- getMyRatings()
-            values$history <- getTraktHistory(refresh = TRUE)
+            values$ratings <- getMyRatings(accessCode)
+            values$history <- getTraktHistory(refresh = TRUE, accessCode)
             shiny::showNotification("Done!", type = "message")
             material_spinner_hide(session, "showPlot")
             material_spinner_hide(session, "ratingsPlot")
