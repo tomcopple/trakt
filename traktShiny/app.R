@@ -14,7 +14,7 @@ print('Got Dropbox')
 readRenviron(".Renviron")
 # options(shiny.trace = TRUE)
 # Slightly different code for working locally; comment out before publishing to shiny
-# if(str_detect(getwd(), 'Shiny', negate = T)) setwd('traktShiny')
+if(str_detect(getwd(), 'Shiny', negate = T)) setwd('traktShiny')
 
 getwd()
 
@@ -113,6 +113,7 @@ ui <- material_page(
             ),
             material_column(
                 width = 9, 
+                material_switch(input_id = 'mainInput', off_label = 'Show ratings', on_label = 'Show plays', initial_value = TRUE),
                 material_card(title = "", plotlyOutput("plotlyTime", height = "100%")),
                 material_card(title = "", 
                               material_slider(
@@ -232,40 +233,65 @@ server <- function(input, output, session) {
         print(values$top10)
     })
     
-    ### Plotly time series area chart  ----
+    ### plotlyTIme: Plotly time series area chart  ----
     output$plotlyTime <- renderPlotly({
         
-        top10plays <- values$top10data %>% 
-            ## Create a count of plays per day
-            count(show, date) %>% 
-            ## Then create a 30 day rolling avg?
-            spread(key = show, value = n) %>% 
-            full_join(., tibble(
-                date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)
-            ), by = 'date') %>% 
-            gather(-date, key = show, value = n) %>% 
-            mutate(n = replace_na(n, 0)) %>% 
-            arrange(show, date) %>% 
-            group_by(show) %>% 
-            mutate(plays = c(cumsum(n[1:29]),
-                             zoo::rollsum(n, k = 30, align = 'right'))) %>% 
-            ungroup() %>% 
-            mutate(show = forcats::fct_relevel(show, levels = values$top10)) %>% 
-            ## Something weird happening with old episode of Daily show, delete 
-            ## anything that says oveer 60 plays in 1 month
-            mutate(plays = ifelse(plays >= 60, 60, plays)) 
+        if (input$mainInput) {
+            top10plays <- values$top10data %>% 
+                ## Create a count of plays per day
+                count(show, date) %>% 
+                ## Then create a 30 day rolling avg?
+                spread(key = show, value = n) %>% 
+                full_join(., tibble(
+                    date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)
+                ), by = 'date') %>% 
+                gather(-date, key = show, value = n) %>% 
+                mutate(n = replace_na(n, 0)) %>% 
+                arrange(show, date) %>% 
+                group_by(show) %>% 
+                mutate(plays = c(cumsum(n[1:29]),
+                                 zoo::rollsum(n, k = 30, align = 'right'))) %>% 
+                ungroup() %>% 
+                mutate(show = forcats::fct_relevel(show, levels = values$top10)) %>% 
+                ## Something weird happening with old episode of Daily show, delete 
+                ## anything that says oveer 60 plays in 1 month
+                mutate(plays = ifelse(plays >= 60, 60, plays)) 
+            
+            ## Plot plotly graph
+            top10plays %>% 
+                group_by(show) %>% 
+                plot_ly(x = ~date, y = ~plays, color = ~show, type = 'scatter', mode = 'lines',
+                        fill = 'tozeroy', colors = 'Spectral', 
+                        text = ~str_c(show, '<br>Plays: ', plays), hoverinfo = 'text') %>% 
+                layout(xaxis = list(title = ""),
+                       yaxis = list(title = 'Monthly plays'),
+                       title = str_c('Top 10 shows in ', input$chooseYear),
+                       legend = list(orientation = 'h', xanchor = 'left', x = 0,
+                                     yanchor = 'top', y = -0.05))    
+        } else {
+            chooseYear <- input$chooseYear
+            values$filtered %>% 
+                # inner_join(values$ratings, by = c('show', 'season', 'episode')) %>% 
+                inner_join(ratings, by = c('show', 'season', 'episode')) %>% 
+                group_by(show) %>% 
+                filter(rating > 0, !is.na(rating)) %>% 
+                filter(n() >= 3) %>% 
+                plot_ly(x = ~date.x, y = ~rating, color = ~show, type = 'scatter',
+                        colors = 'Spectral', 
+                        text = ~str_c(show, 
+                                      ' s', str_pad(season, width = 2, side = 'left', pad = "0"),
+                                      'e', str_pad(episode, width = 2, side = 'left', pad = "0"),
+                                      " ", title.x, ": ", rating),
+                        hoverinfo = 'text') %>% 
+                layout(xaxis = list(title = ""),
+                       showlegend = FALSE,
+                       yaxis = list(title = 'Ratings'),
+                       title = str_c("Episode Ratings for ", chooseYear),
+                       legend = list(orientation = 'h', xanchor = 'left', 
+                                     x = 0, yanchor = 'top', y = -0.05))
+        }
         
-        ## Plot plotly graph
-        top10plays %>% 
-            group_by(show) %>% 
-            plot_ly(x = ~date, y = ~plays, color = ~show, type = 'scatter', mode = 'lines',
-                    fill = 'tozeroy', colors = 'Spectral', 
-                    text = ~str_c(show, '<br>Plays: ', plays), hoverinfo = 'text') %>% 
-            layout(xaxis = list(title = ""),
-                   yaxis = list(title = 'Monthly plays'),
-                   title = str_c('Top 10 shows in ', input$chooseYear),
-                   legend = list(orientation = 'h', xanchor = 'left', x = 0,
-                                 yanchor = 'top', y = -0.05))
+        
                       
                       
     })
