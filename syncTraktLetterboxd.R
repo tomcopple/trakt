@@ -5,9 +5,7 @@ source('traktShiny/setTrakt.R')
 # 1. Get Trakt Movie History ----------------------------------------------
 
 traktRawHis <- httr::GET(url = 'https://api.trakt.tv/users/tomcopple/watched/movies',
-                    config = httr::add_headers(.headers = c("trakt-api-key" = traktApi,
-                                                            "Content-Type" = "application/json",
-                                                            "trakt-api-version" = 2)))
+                    headers)
 httr::stop_for_status(traktRawHis)
 traktHis <- httr::content(traktRawHis, as = 'text') %>% 
     jsonlite::fromJSON(simplifyDataFrame = T, flatten = T) %>% 
@@ -21,9 +19,7 @@ traktHis %>% count(year(date)) %>% ggplot(aes(x = as.factor(`year(date)`), y = n
 # Merge with Trakt ratings ------------------------------------------------
 
 traktRawRat <- httr::GET(url = 'https://api.trakt.tv/users/tomcopple/ratings/movies',
-                      config = httr::add_headers(.headers = c("trakt-api-key" = traktApi,
-                                                              "Content-Type" = "application/json",
-                                                              "trakt-api-version" = 2)))
+                      headers)
 traktRat <- httr::content(traktRawRat, as = 'text') %>% 
     jsonlite::fromJSON(simplifyDataFrame = T, flatten = T) %>% 
     select(title = movie.title, rating) %>% 
@@ -38,7 +34,7 @@ trakt %>% filter(is.na(rating))
 
 # Get Letterboxd History --------------------------------------------------
 
-letFeed <- "https://letterboxd.com/tomcopple2/rss/"
+letFeed <- "https://letterboxd.com/tomcopple/rss/"
 letNew <- httr::GET(letFeed) %>% 
     xml2::read_xml() %>% 
     xml2::xml_find_all(xpath = 'channel') %>% 
