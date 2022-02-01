@@ -39,7 +39,7 @@ getMyRatings <- function(accessCode) {
     # Archer has some weird season/episode numbering, needs fixing. 
     ratings <- ratings %>% 
         mutate(
-            spisode = ifelse(show == "Archer" & season == 3,
+            episode = ifelse(show == "Archer" & season == 3,
                              episode + 3, episode),
             episode = ifelse(show == "Archer" & season == 0,
                              episode - 3, episode),
