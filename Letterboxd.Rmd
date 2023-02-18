@@ -27,7 +27,7 @@ diary <- rdrop2::drop_read_csv(file = 'R/trakt/letterboxd/diary.csv') %>%
                   
 ## And get any new films from the RSS feed
 letFeed <- xml2::read_xml("https://letterboxd.com/tomcopple/rss/") %>% 
-  xml2::xml_find_all('//item') %>% xml_child('letterboxd:filmTitle') 
+    xml2::xml_find_all('//item') %>% 
     xml2::as_list() %>% 
     map_df(unlist) %>% 
     select(title = filmTitle, date = watchedDate, rating = memberRating) %>% 
