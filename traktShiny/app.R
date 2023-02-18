@@ -1,7 +1,7 @@
 library(shiny);library(plotly);library(shinymaterial)
 library(tidyverse);library(lubridate);library(jsonlite)
 library(httr);library(RColorBrewer);library(magrittr)
-library(googlesheets);library(zoo);library(forcats);library(rdrop2)
+library(zoo);library(forcats);library(rdrop2)
 
 # dropbox <- rdrop2::drop_auth()
 # saveRDS(dropbox, 'dropbox.rds')
@@ -46,9 +46,7 @@ token <- oauth2.0_token(endpoint = endpoint,
                         app = app,
                         use_oob = TRUE)
 
-if (token$credentials$expires_in < 700000) {
-    token$refresh()
-}
+token$refresh()
 
 accessCode <- token$credentials$access_token
 print(str_c('Access code: ', accessCode))
