@@ -208,16 +208,18 @@ server <- function(input, output, session) {
         print(str_c("Selecting ", chooseYear))
         
         if (chooseYear == 'All time') {
-            values$filtered <- values$history
+            values$filtered <- values$history %>% mutate(date = as_date(date))
             values$minDate <- as_date(min(values$filtered$date))
             values$maxDate <- as_date(max(values$filtered$date))
             
         } else if (chooseYear == 'Last 30 days') {
             values$minDate <- today() - days(30)
             values$maxDate <- today()
-            values$filtered <- filter(values$history, date >= values$minDate)
+            values$filtered <- values$history %>% mutate(date = as_date(date)) %>% 
+                filter(date >= values$minDate)
         } else {
-            values$filtered <- filter(values$history, year(date) == chooseYear)
+            values$filtered <- values$history %>% mutate(date = as_date(date)) %>% 
+                filter(year(date) == chooseYear)
             values$minDate <- dmy(str_c("01-01-", chooseYear))
             values$maxDate <- dmy(str_c("31-12-", chooseYear))
         }
@@ -250,7 +252,7 @@ server <- function(input, output, session) {
                 mutate(plays = c(cumsum(n[1:29]),
                                  zoo::rollsum(n, k = 30, align = 'right'))) %>% 
                 ungroup() %>% 
-                mutate(show = forcats::fct_relevel(show, levels = values$top10)) %>% 
+                mutate(show = forcats::fct_relevel(show, values$top10)) %>% 
                 ## Something weird happening with old episode of Daily show, delete 
                 ## anything that says oveer 60 plays in 1 month
                 mutate(plays = ifelse(plays >= 60, 60, plays)) 
@@ -333,13 +335,14 @@ server <- function(input, output, session) {
         ## Filter data for shows with more than 3 ratings then show top 10
         topRat <- values$filtered %>% 
             inner_join(values$ratings, by = c('show', 'season', 'episode')) %>% 
-            group_by(show) %>% 
+            group_by(show, season) %>% 
             filter(rating > 0, !is.na(rating)) %>% 
             filter(n() >= 3) %>% 
             summarise(avRat = mean(rating), n = n()) %>% 
             ungroup() %>% 
             arrange(desc(avRat)) %>% 
             slice(c(minSlice:maxSlice)) %>% 
+            unite(show, season, col = 'show', sep = ' s') %>% 
             arrange(avRat) %>% 
             mutate(show = forcats::fct_inorder(show)) %>% 
             group_by(show)
