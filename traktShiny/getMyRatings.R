@@ -48,7 +48,7 @@ getMyRatings <- function(accessCode) {
         ) %>% 
         filter(season != 0)
     
-    min <- count(ratings, show) %>% filter(n > 2)
+    min <- count(ratings, show) %>% filter(n > 1)
     
     ratings <- filter(ratings, show %in% min$show)
 
