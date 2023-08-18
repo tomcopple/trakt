@@ -236,6 +236,7 @@ server <- function(input, output, session) {
     ### plotlyTIme: Plotly time series area chart  ----
     output$plotlyTime <- renderPlotly({
         
+        ## If mainInput then showing plays
         if (input$mainInput) {
             top10plays <- values$top10data %>% 
                 ## Create a count of plays per day
@@ -260,11 +261,30 @@ server <- function(input, output, session) {
             ## Plot plotly graph
             top10plays %>% 
                 group_by(show) %>% 
-                plot_ly(x = ~date, y = ~plays, color = ~show, type = 'scatter', mode = 'lines',
-                        fill = 'tozeroy', colors = 'Spectral', 
-                        text = ~str_c(show, '<br>Plays: ', plays), hoverinfo = 'text') %>% 
+                plot_ly(type = 'scatter') %>% 
+                add_trace(x = ~date, y = ~plays, color = ~show, mode = 'lines',
+                          fill = 'tozeroy', colors = 'Spectral', 
+                          text = ~str_c(show, '<br>Plays: ', plays), hoverinfo = 'text') %>% 
+                add_lines(data = values$filtered %>% 
+                              count(date) %>% 
+                              full_join(., tibble(
+                                  # date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)),
+                                  date = seq.Date(from = values$minDate, to = max(filtered$date), by = 1)),
+                                  by = 'date'
+                              ) %>% 
+                                  mutate(n = replace_na(n, 0)) %>% 
+                              arrange(date) %>% ungroup() %>% 
+                              mutate(total = c(cumsum(n[1:29]),
+                                               zoo::rollsum(n, k = 30, align = 'right'))),
+                          name = 'Total',
+                          text = ~str_c("Total: ", total), hoverinfo = 'text',
+                          line = list(color = I('yellow')),
+                        x = ~date, y = ~total, yaxis = 'y2') %>% 
                 layout(xaxis = list(title = ""),
-                       yaxis = list(title = 'Monthly plays'),
+                       yaxis = list(title = 'Monthly plays',
+                                    rangemode = 'tozero'),
+                       yaxis2 = list(title = 'Total', overlaying = 'y', side = 'right',
+                                     rangemode = 'tozero'),
                        title = str_c('Top 10 shows in ', input$chooseYear),
                        legend = list(orientation = 'h', xanchor = 'left', x = 0,
                                      yanchor = 'top', y = -0.05))    
