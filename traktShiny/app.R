@@ -6,8 +6,7 @@ library(zoo);library(forcats)
 # Slightly different code for working locally; comment out before publishing to shiny
 # if(str_detect(getwd(), 'Shiny', negate = T)) setwd('traktShiny')
 # options(shiny.autoreload = TRUE)
-
-getwd()
+# getwd()
 
 
 # Dropbox Authenticatio ---------------------------------------------------
@@ -23,9 +22,9 @@ getwd()
 #     client, port = 43451,
 #     auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
 # )
-saveRDS(dropboxToken, 'dropbox.RDS')
+# saveRDS(dropboxToken, 'dropbox.RDS')
+print('Getting dropbox token')
 dropboxToken <- readRDS('dropbox.RDS')
-
 
 print("Authenticating Trakt")
 # Environmental variables -------------------------------------------------
@@ -51,7 +50,7 @@ print("Authenticating Trakt")
 #     auth_url = "https://trakt.tv/oauth/authorize"
 # )
 
-saveRDS(traktToken, 'trakt.RDS')
+# saveRDS(traktToken, 'trakt.RDS')
 traktToken <- readRDS('trakt.RDS')
 
 source("getMyRatings.R")
