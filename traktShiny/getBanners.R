@@ -4,7 +4,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
     
     if (refresh) {
         
-        library(tidyverse);library(httr2);library(httr)
+        library(tidyverse);library(httr2);library(httr);library(magrittr)
         
         getImages <- function(slugs, tvdb) {
             
@@ -36,7 +36,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         write_csv(images, 'images.csv')
         
         ## Dropbox authentication and save
-        dropbox <- readRDS('dropbox.rds')
+        dropbox <- readRDS('dropbox.RDS')
         
         reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
             req_auth_bearer_token(dropbox$access_token) %>% 
@@ -55,7 +55,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         
     } else {
         
-        dropbox <- readRDS('dropbox.rds')
+        dropbox <- readRDS('dropbox.RDS')
         
         reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
             req_auth_bearer_token(dropbox$access_token) %>%
