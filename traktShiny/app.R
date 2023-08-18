@@ -1,60 +1,64 @@
 library(shiny);library(plotly);library(shinymaterial)
 library(tidyverse);library(lubridate);library(jsonlite)
-library(httr);library(RColorBrewer);library(magrittr)
-library(zoo);library(forcats);library(rdrop2)
+library(httr2);library(RColorBrewer)
+library(zoo);library(forcats)
 
-# dropbox <- rdrop2::drop_auth()
-# saveRDS(dropbox, 'dropbox.rds')
-print('Getting Dropbox')
-dropbox <- readRDS('dropbox.rds')
-print('Got Dropbox')
-
-# options(shiny.autoreload = TRUE)
-
-readRenviron(".Renviron")
-# options(shiny.trace = TRUE)
 # Slightly different code for working locally; comment out before publishing to shiny
-if(str_detect(getwd(), 'Shiny', negate = T)) setwd('traktShiny')
+# if(str_detect(getwd(), 'Shiny', negate = T)) setwd('traktShiny')
+# options(shiny.autoreload = TRUE)
 
 getwd()
 
 
+# Dropbox Authenticatio ---------------------------------------------------
+
+# client <- oauth_client(
+#     id = Sys.getenv('DROPBOX_KEY'),
+#     secret = Sys.getenv('DROPBOX_SECRET'),
+#     token_url = "https://api.dropboxapi.com/oauth2/token",
+#     name = 'Rstudio_TC'
+# )
+# 
+# dropboxToken <- oauth_flow_auth_code(
+#     client, port = 43451,
+#     auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
+# )
+saveRDS(dropboxToken, 'dropbox.RDS')
+dropboxToken <- readRDS('dropbox.RDS')
+
+
 print("Authenticating Trakt")
 # Environmental variables -------------------------------------------------
-trakt_id <- Sys.getenv('TRAKTSHINY_ID')
-print(str_c('trakt_id: ', trakt_id))
-trakt_secret <- Sys.getenv('TRAKTSHINY_SECRET')
-print(str_c('trakt_secret: ', trakt_secret))
-traktUser <- Sys.getenv("TRAKT_USER")
-print(str_c('traktUser: ', traktUser))
-traktApi <- Sys.getenv('TRAKT_API')
-print(str_c('traktApi: ', traktApi))
+# trakt_id <- Sys.getenv('TRAKTSHINY_ID')
+# print(str_c('trakt_id: ', trakt_id))
+# trakt_secret <- Sys.getenv('TRAKTSHINY_SECRET')
+# print(str_c('trakt_secret: ', trakt_secret))
+# traktUser <- Sys.getenv("TRAKT_USER")
+# print(str_c('traktUser: ', traktUser))
+# traktApi <- Sys.getenv('TRAKT_API')
+# print(str_c('traktApi: ', traktApi))
 
 ### Get a token, don't need to do this every time?
-app <- oauth_app(
-    appname = "traktShiny",
-    key = trakt_id,
-    secret = trakt_secret,
-    redirect_uri = "urn:ietf:wg:oauth:2.0:oob"
-)
+# traktClient <- oauth_client(
+#     id = Sys.getenv('TRAKTSHINY_ID'),
+#     secret = Sys.getenv('TRAKTSHINY_SECRET'),
+#     token_url = "https://api.trakt.tv/oauth/token",
+#     name = 'traktShiny'
+# )
+# 
+# traktToken <- oauth_flow_auth_code(
+#     traktClient, port = 43451,
+#     auth_url = "https://trakt.tv/oauth/authorize"
+# )
 
-endpoint <- oauth_endpoint(authorize = "https://trakt.tv/oauth/authorize",
-                           access = "https://api.trakt.tv/oauth/token")
-
-
-token <- oauth2.0_token(endpoint = endpoint,
-                        app = app,
-                        use_oob = TRUE)
-
-token$refresh()
-
-accessCode <- token$credentials$access_token
-print(str_c('Access code: ', accessCode))
-
+saveRDS(traktToken, 'trakt.RDS')
+traktToken <- readRDS('trakt.RDS')
 
 source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
+
+accessCode <- traktToken$access_token
 
 print('Getting ratings')
 ratings <- getMyRatings(accessCode)
@@ -268,8 +272,8 @@ server <- function(input, output, session) {
                 add_lines(data = values$filtered %>% 
                               count(date) %>% 
                               full_join(., tibble(
-                                  # date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)),
-                                  date = seq.Date(from = values$minDate, to = max(filtered$date), by = 1)),
+                                  date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)),
+                                  # date = seq.Date(from = values$minDate, to = max(filtered$date), by = 1)),
                                   by = 'date'
                               ) %>% 
                                   mutate(n = replace_na(n, 0)) %>% 

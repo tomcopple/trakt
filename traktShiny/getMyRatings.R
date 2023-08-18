@@ -1,41 +1,45 @@
 getMyRatings <- function(accessCode) {
     require(tidyverse);require(lubridate);require(jsonlite);require(httr)
+    require(httr2)
     
     # Create url
     baseurl <- "https://api-v2launch.trakt.tv/users/"
     call <- "/ratings/episodes"
     
-    url <- paste0(baseurl, 'tomcopple', call)
+    req <- request(base_url = str_glue(
+        "{baseurl}tomcopple{call}"
+    ))
     
     trakt_id <- Sys.getenv('TRAKTSHINY_ID')
     
     
     # Set info for GET request. 
-    headers <- httr::add_headers(.headers = c("trakt-api-key" = trakt_id,
-                                              "Content-Type" = "application/json",
-                                              "trakt-api-version" = 2,
-                                              "Authorization" = paste('Bearer', accessCode)))
-    response <- httr::GET(url, headers)
-    httr::stop_for_status(response)
-    response <- httr::content(response, as = "text")
-    response <- jsonlite::fromJSON(response, 
-                                   simplifyDataFrame = TRUE, 
-                                   flatten = TRUE)
+    req2 <- req %>% 
+        req_auth_bearer_token(accessCode) %>%
+        req_headers(
+            "trakt-api-key" = trakt_id,
+            "Content-Type" = "application/json",
+            "trakt-api-version" = 2
+        )
     
+    resp <- req_perform(req2)
     
-    ratings <- response %>% 
-        select(
-            rating, 
-            title = episode.title, 
-            show = show.title, 
-            season = episode.season, 
-            episode = episode.number,
-            slug = show.ids.slug,
-            tvdb = show.ids.tvdb
-        ) %>% 
-        mutate(date = ymd(substr(response$rated_at, 0, 10)))  %>% 
-        as_tibble()
-    
+    ratings <- resp_body_json(resp) %>% 
+        map_df(function(x) {
+            df <- tibble(
+                date = x$rated_at,
+                rating = x$rating,
+                title = x$episode$title,
+                show = x$show$title,
+                season = x$episode$season,
+                episode = x$episode$number,
+                slug = x$show$ids$slug,
+                tvdb = x$show$ids$tvdb
+            )
+            return(df)
+        }) %>% 
+        mutate(date = ymd(str_sub(date, 1, 10)))
+
     # Archer has some weird season/episode numbering, needs fixing. 
     ratings <- ratings %>% 
         mutate(
@@ -46,12 +50,11 @@ getMyRatings <- function(accessCode) {
             season = ifelse(show == "Archer" & season == 0,
                             3, season)
         ) %>% 
-        filter(season != 0)
+        ## Don't include specials
+        filter(season != 0) %>% 
+        ## And filter out shows with only one rating
+        group_by(show) %>% filter(n() > 1)
     
-    min <- count(ratings, show) %>% filter(n > 1)
+    return(ratings)
     
-    ratings <- filter(ratings, show %in% min$show)
-
-        return(ratings)
-
     }

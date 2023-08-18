@@ -4,7 +4,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
     
     if (refresh) {
         
-        library(tidyverse);library(httr);library(jsonlite);library(magrittr);library(rdrop2)
+        library(tidyverse);library(httr2);library(httr)
         
         getImages <- function(slugs, tvdb) {
             
@@ -37,14 +37,40 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         
         ## Dropbox authentication and save
         dropbox <- readRDS('dropbox.rds')
-        rdrop2::drop_upload(file = 'images.csv',
-                            path = "R/trakt", dtoken = dropbox)
+        
+        reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
+            req_auth_bearer_token(dropbox$access_token) %>% 
+            req_headers('Content-Type' = 'application/octet-stream') %>% 
+            req_headers(
+                'Dropbox-API-Arg' = str_c('{',
+                                          '"autorename":false,',
+                                          '"mode":"overwrite",',
+                                          '"path":"/R/trakt/images.csv",',
+                                          '"strict_conflict":false', 
+                                          '}')
+            ) %>% 
+            req_body_file(path = 'images.csv')
+        
+        respUpload <- req_perform(reqUpload)
+        
     } else {
         
         dropbox <- readRDS('dropbox.rds')
-        images <- rdrop2::drop_read_csv(file = 'R/trakt/images.csv',
-                                        dtoken = dropbox) %>% 
-            as_tibble()
+        
+        reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
+            req_auth_bearer_token(dropbox$access_token) %>%
+            req_method('POST') %>%
+            req_headers(
+                'Dropbox-API-Arg' = str_c('{',
+                                          '"path":"/R/trakt/images.csv"',
+                                          '}')
+            )
+        
+        respDownload <- req_perform(reqDownload,
+                                    path = 'images.csv')
+        
+        images <- readr::read_csv('images.csv')
+        
     }
     
     return(images)
