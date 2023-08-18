@@ -47,13 +47,19 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         history <- distinct(history)
         
         ## And just remove everything from August 30 2015
-        history <- history %>% filter(date(date) != '2015-08-30')
+        ## And all these other dates too which look wrong
+        history <- history %>% 
+            filter(date(date) != '2015-08-30',
+                   date(date) != '2015-05-01',
+                   date(date) != '2015-06-18',
+                   date(date) != '2015-06-16',
+                   date(date) != '2011-08-29')
         
         write_csv(history, str_c(lubridate::today(), '-traktHistory.csv'))
         write_csv(history, 'traktHistory.csv')
         
         ## Dropbox authentication and save
-        dropbox <- readRDS('dropbox.rds')
+        dropbox <- readRDS('dropbox.RDS')
         
         reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
             req_auth_bearer_token(dropbox$access_token) %>% 
@@ -72,7 +78,7 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         
     } else {
         
-        dropbox <- readRDS('dropbox.rds')
+        dropbox <- readRDS('dropbox.RDS')
         
         reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
             req_auth_bearer_token(dropbox$access_token) %>%
