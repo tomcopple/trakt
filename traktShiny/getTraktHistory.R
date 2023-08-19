@@ -2,6 +2,15 @@
 
 getTraktHistory <- function(refresh = TRUE, accessCode) {
     
+    dropboxClient <- oauth_client(
+        id = Sys.getenv('DROPBOX_KEY'),
+        secret = Sys.getenv('DROPBOX_SECRET'),
+        token_url = "https://api.dropboxapi.com/oauth2/token",
+        name = 'Rstudio_TC'
+    )
+    dropboxToken <- readRDS('dropbox.RDS')
+    
+    
     library(tidyverse);library(lubridate);library(stringr);library(httr2)
 
     if (refresh) {
@@ -58,11 +67,10 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         write_csv(history, str_c(lubridate::today(), '-traktHistory.csv'))
         write_csv(history, 'traktHistory.csv')
         
-        ## Dropbox authentication and save
-        dropbox <- readRDS('dropbox.RDS')
-        
         reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-            req_auth_bearer_token(dropbox$access_token) %>% 
+            req_oauth_refresh(client = dropboxClient, 
+                              refresh_token = dropboxToken$refresh_token) %>% 
+            # req_auth_bearer_token(dropboxToken$refresh_token) %>% 
             req_headers('Content-Type' = 'application/octet-stream') %>% 
             req_headers(
                 'Dropbox-API-Arg' = str_c('{',
@@ -72,16 +80,15 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
                                           '"strict_conflict":false', 
                                           '}')
             ) %>% 
-            req_body_file(path = here::here('traktHistory.csv'))
+            req_body_file(path = 'traktHistory.csv')
         
         respUpload <- req_perform(reqUpload)
         
     } else {
-        
-        dropbox <- readRDS('dropbox.RDS')
-        
+    
         reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
-            req_auth_bearer_token(dropbox$access_token) %>%
+            req_oauth_refresh(client = dropboxClient, 
+                              refresh_token = dropboxToken$refresh_token) %>% 
             req_method('POST') %>%
             req_headers(
                 'Dropbox-API-Arg' = str_c('{',
@@ -90,9 +97,9 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
             )
         
         respDownload <- req_perform(reqDownload,
-                                    path = here::here('traktHistory.csv'))
+                                    path = 'traktHistory.csv')
         
-        history <- readr::read_csv('traktHistory.csv')
+        history <- readr::read_csv('traktHistory.csv', show_col_types = FALSE)
     }
     
     return(history)

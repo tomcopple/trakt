@@ -1,23 +1,33 @@
-library(shiny);library(plotly);library(shinymaterial)
-library(tidyverse);library(lubridate);library(jsonlite)
-library(httr2);library(RColorBrewer)
-library(zoo);library(forcats)
+suppressPackageStartupMessages({
+    library(shiny)
+    library(plotly)
+    library(shinymaterial)
+    library(tidyverse)
+    library(lubridate)
+    library(jsonlite)
+    library(httr2)
+    library(httr)
+    library(RColorBrewer)
+    library(zoo)
+    library(forcats)
+})
 
-# Slightly different code for working locally; comment out before publishing to shiny
-# if(str_detect(getwd(), 'Shiny', negate = T)) setwd('traktShiny')
-# options(shiny.autoreload = TRUE)
-# getwd()
-
+# Check if running in Shiny or locally, need to check WorkDir
+if (!shiny::isRunning()) {
+    if(str_detect(getwd(), 'Shiny', negate = T)) setwd('traktShiny')
+    options(shiny.autoreload = TRUE)
+} 
+getwd()
 
 # Dropbox Authenticatio ---------------------------------------------------
 
-# client <- oauth_client(
-#     id = Sys.getenv('DROPBOX_KEY'),
-#     secret = Sys.getenv('DROPBOX_SECRET'),
-#     token_url = "https://api.dropboxapi.com/oauth2/token",
-#     name = 'Rstudio_TC'
-# )
-# 
+dropboxClient <- oauth_client(
+    id = Sys.getenv('DROPBOX_KEY'),
+    secret = Sys.getenv('DROPBOX_SECRET'),
+    token_url = "https://api.dropboxapi.com/oauth2/token",
+    name = 'Rstudio_TC'
+)
+
 # dropboxToken <- oauth_flow_auth_code(
 #     client, port = 43451,
 #     auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
@@ -25,8 +35,9 @@ library(zoo);library(forcats)
 # saveRDS(dropboxToken, 'dropbox.RDS')
 print('Getting dropbox token')
 dropboxToken <- readRDS('dropbox.RDS')
+exists(x = 'dropboxToken')
 
-print("Authenticating Trakt")
+print("Getting trakt token")
 # Environmental variables -------------------------------------------------
 # trakt_id <- Sys.getenv('TRAKTSHINY_ID')
 # print(str_c('trakt_id: ', trakt_id))
@@ -50,8 +61,9 @@ print("Authenticating Trakt")
 #     auth_url = "https://trakt.tv/oauth/authorize"
 # )
 
-# saveRDS(traktToken, 'trakt.RDS')
-traktToken <- readRDS('trakt.RDS')
+# saveRDS(traktToken, 'traktToken.RDS')
+traktToken <- readRDS('traktToken.RDS')
+exists('traktToken')
 
 source("getMyRatings.R")
 source('getTraktHistory.R')
@@ -60,11 +72,11 @@ source('getBanners.R')
 accessCode <- traktToken$access_token
 
 print('Getting ratings')
-ratings <- getMyRatings(accessCode)
+ratings <- getMyRatings(refresh = F, accessCode)
 print('Got ratings, getting history')
-history <- getTraktHistory(refresh = TRUE, accessCode)
+history <- getTraktHistory(refresh = F, accessCode)
 print('Got history, getting banners')
-images <- getBanners(refresh = T)
+images <- getBanners(refresh = F)
 print('Got banners')
 
 showList <- history %>% 
@@ -196,7 +208,7 @@ server <- function(input, output, session) {
             material_spinner_show(session, 'showPlot')
             material_spinner_show(session, 'ratingsPlot')
             shiny::showNotification("Refreshing data, may take some time...", type = "default")
-            values$ratings <- getMyRatings(accessCode)
+            values$ratings <- getMyRatings(refresh = TRUE, accessCode)
             values$history <- getTraktHistory(refresh = TRUE, accessCode)
             shiny::showNotification("Done!", type = "message")
             material_spinner_hide(session, "showPlot")
@@ -239,6 +251,7 @@ server <- function(input, output, session) {
     ### plotlyTIme: Plotly time series area chart  ----
     output$plotlyTime <- renderPlotly({
         
+        print('plotlyTime')
         ## If mainInput then showing plays
         if (input$mainInput) {
             top10plays <- values$top10data %>% 
@@ -264,15 +277,14 @@ server <- function(input, output, session) {
             ## Plot plotly graph
             top10plays %>% 
                 group_by(show) %>% 
-                plot_ly(type = 'scatter') %>% 
+                plot_ly(type = 'scatter', mode = 'markers', colors = 'Set3') %>% 
                 add_trace(x = ~date, y = ~plays, color = ~show, mode = 'lines',
-                          fill = 'tozeroy', colors = 'Spectral', 
+                          fill = 'tozeroy', 
                           text = ~str_c(show, '<br>Plays: ', plays), hoverinfo = 'text') %>% 
                 add_lines(data = values$filtered %>% 
                               count(date) %>% 
                               full_join(., tibble(
                                   date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)),
-                                  # date = seq.Date(from = values$minDate, to = max(filtered$date), by = 1)),
                                   by = 'date'
                               ) %>% 
                                   mutate(n = replace_na(n, 0)) %>% 
@@ -295,7 +307,7 @@ server <- function(input, output, session) {
             chooseYear <- input$chooseYear
             values$filtered %>% 
                 # inner_join(values$ratings, by = c('show', 'season', 'episode')) %>% 
-                inner_join(ratings, by = c('show', 'season', 'episode')) %>% 
+                inner_join(ratings, by = c('show', 'season', 'episode'), relationship = 'many-to-many') %>% 
                 group_by(show) %>% 
                 filter(rating > 0, !is.na(rating)) %>% 
                 filter(n() >= 3) %>% 
@@ -321,6 +333,8 @@ server <- function(input, output, session) {
     
     ### Top 10 plays barchart ----
     output$plotlyBar <- renderPlotly({
+        
+        print('plotlyBar')
         
         ## Just a horizontal bar showing totals
         minSlice <- input$sliderBar * 10 - 9
@@ -352,12 +366,14 @@ server <- function(input, output, session) {
     #### Main page ratings plot ---------
     output$plotlyRat <- renderPlotly({
         
+        print('plotlyRat')
+        
         minSlice <- input$sliderRat * 10 - 9
         maxSlice <- input$sliderRat * 10
         
         ## Filter data for shows with more than 3 ratings then show top 10
         topRat <- values$filtered %>% 
-            inner_join(values$ratings, by = c('show', 'season', 'episode')) %>% 
+            inner_join(values$ratings, by = c('show', 'season', 'episode'), relationship = 'many-to-many') %>% 
             group_by(show, season) %>% 
             filter(rating > 0, !is.na(rating)) %>% 
             filter(n() >= 3) %>% 
@@ -411,6 +427,8 @@ server <- function(input, output, session) {
     ### Show ratings plot ---- 
     
         output$showPlot <- renderPlotly({
+            
+            print('showPlot')
             
             chooseShow <- gsub("_shinymaterialdropdownspace_", " ", input$chooseShow)
             
@@ -469,6 +487,8 @@ server <- function(input, output, session) {
         })
         
         output$ratingsPlot <- renderPlotly({
+            
+            print('ratingsPlot')
             
             chooseShow <- gsub("_shinymaterialdropdownspace_", " ", input$chooseShow)
             

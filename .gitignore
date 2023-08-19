@@ -31,3 +31,5 @@ vignettes/*.pdf
 dropbox.rds
 Letterboxd.html
 rsconnect
+token.RDS
+trakt.RDS
