@@ -2,3 +2,4 @@
 traktHistory.csv
 .httr-oauth
 *.rds
+*.RDS
