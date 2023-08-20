@@ -29,7 +29,7 @@ dropboxClient <- oauth_client(
 )
 
 # dropboxToken <- oauth_flow_auth_code(
-#     client, port = 43451,
+#     dropboxClient, port = 43451,
 #     auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
 # )
 # saveRDS(dropboxToken, 'dropbox.RDS')
