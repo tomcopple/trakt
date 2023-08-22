@@ -2,9 +2,20 @@
 
 getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
     
+    dropboxClient <- oauth_client(
+        id = Sys.getenv('DROPBOX_KEY'),
+        secret = Sys.getenv('DROPBOX_SECRET'),
+        token_url = "https://api.dropboxapi.com/oauth2/token",
+        name = 'Rstudio_TC'
+    )
+    dropboxToken <- readRDS('dropbox.RDS')
+    
+    
     if (refresh) {
         
-        library(tidyverse);library(httr2);library(httr);library(magrittr)
+        suppressPackageStartupMessages({
+            library(tidyverse);library(httr2);library(httr);library(magrittr)
+        })
         
         getImages <- function(slugs, tvdb) {
             
@@ -18,7 +29,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
             APIurl = paste0("https://api.thetvdb.com/series/", 
                             tvdb, "/images/query?keyType=series")
             
-            imageLinks <- data_frame(
+            imageLinks <- tibble(
                 show = slugs, 
                 imageLink = paste0(
                     "https://thetvdb.com/banners/",
@@ -39,7 +50,8 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         dropbox <- readRDS('dropbox.RDS')
         
         reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-            req_auth_bearer_token(dropbox$access_token) %>% 
+            req_oauth_refresh(client = dropboxClient, 
+                              refresh_token = dropboxToken$refresh_token) %>% 
             req_headers('Content-Type' = 'application/octet-stream') %>% 
             req_headers(
                 'Dropbox-API-Arg' = str_c('{',
@@ -58,7 +70,8 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         dropbox <- readRDS('dropbox.RDS')
         
         reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
-            req_auth_bearer_token(dropbox$access_token) %>%
+            req_oauth_refresh(client = dropboxClient, 
+                              refresh_token = dropboxToken$refresh_token) %>% 
             req_method('POST') %>%
             req_headers(
                 'Dropbox-API-Arg' = str_c('{',
@@ -69,7 +82,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         respDownload <- req_perform(reqDownload,
                                     path = 'images.csv')
         
-        images <- readr::read_csv('images.csv')
+        images <- readr::read_csv('images.csv', show_col_types = FALSE)
         
     }
     
