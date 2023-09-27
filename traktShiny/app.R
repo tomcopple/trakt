@@ -307,7 +307,7 @@ server <- function(input, output, session) {
             chooseYear <- input$chooseYear
             values$filtered %>% 
                 # inner_join(values$ratings, by = c('show', 'season', 'episode')) %>% 
-                inner_join(ratings, by = c('show', 'season', 'episode'), relationship = 'many-to-many') %>% 
+                inner_join(values$ratings, by = c('show', 'season', 'episode'), relationship = 'many-to-many') %>% 
                 group_by(show) %>% 
                 filter(rating > 0, !is.na(rating)) %>% 
                 filter(n() >= 3) %>% 
