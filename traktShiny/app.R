@@ -127,6 +127,11 @@ ui <- material_page(
             material_column(
                 width = 9, 
                 material_switch(input_id = 'mainInput', off_label = 'Show ratings', on_label = 'Show plays', initial_value = TRUE),
+                ## Trying to only show this button if the chart shows ratings
+                conditionalPanel(
+                    condition = 'input.mainInput == false',
+                    material_switch(input_id = 'showLines', off_label = 'Show lines', initial_value = FALSE)
+                ),
                 material_card(title = "", plotlyOutput("plotlyTime", height = "100%")),
                 material_card(title = "", 
                               material_slider(
@@ -305,25 +310,114 @@ server <- function(input, output, session) {
                                      yanchor = 'top', y = -0.05))    
         } else {
             chooseYear <- input$chooseYear
-            values$filtered %>% 
-                # inner_join(values$ratings, by = c('show', 'season', 'episode')) %>% 
-                inner_join(values$ratings, by = c('show', 'season', 'episode'), relationship = 'many-to-many') %>% 
+            
+            values$ratingsChartValues <- inner_join(
+                x = values$filtered %>% arrange(date) %>% select(date, show, season, episode, title),
+                y = values$ratings %>% select(show, season, episode, rating),
+                # x = filtered %>% arrange(date) %>% select(date, show, season, episode, title),
+                # y = ratings %>% select(show, season, episode, rating),
+                by = c('show', 'season', 'episode'), 
+                relationship = 'many-to-many'
+            ) %>% 
                 group_by(show) %>% 
                 filter(rating > 0, !is.na(rating)) %>% 
-                filter(n() >= 3) %>% 
-                plot_ly(x = ~date.x, y = ~rating, color = ~show, type = 'scatter',
-                        colors = 'Spectral', 
-                        text = ~str_c(show, 
-                                      ' s', str_pad(season, width = 2, side = 'left', pad = "0"),
-                                      'e', str_pad(episode, width = 2, side = 'left', pad = "0"),
-                                      " ", title.x, ": ", rating),
+                filter(n() >= 3)
+            
+            ratingsChart <- if(input$showLines) {
+                print('Adding lines to chart')
+                
+                values$ratingsChartPlot <- values$ratingsChartValues %>% 
+                    ungroup() %>% 
+                    mutate(
+                        legendgroup = str_glue(
+                            "{show} s{str_pad(season, width = 2, side = 'left', pad = '0')}"
+                        )) %>% 
+                    arrange(show, date) %>% 
+                    group_by(legendgroup) %>% 
+                    mutate(date2 = as_date(date)) %>% 
+                    mutate(n = n_distinct(date2)) %>% 
+                    mutate(loess = ifelse(n <= 3, mean(rating),
+                                          predict(loess(rating ~ as.numeric(date), span = 9))
+                    ))
+                
+                ## Think it needs to be in a for loop
+                p1 <- plot_ly(x = ~date, color = ~show)
+                
+                for (i in unique(values$ratingsChartPlot$legendgroup)) {
+                    data <- filter(values$ratingsChartPlot, legendgroup == i)
+                    # showLegend <- unique(data$season) == 1
+                    minSeason <- min(values$ratingsChartPlot %>% 
+                                         filter(show == unique(data$show)) %>% 
+                                         pull(season))
+                    showLegend <- unique(data$season) == minSeason
+                    p1 <- p1 %>% 
+                        add_markers(
+                            data = data,
+                            y = ~rating, alpha = 0.4,
+                            name = ~show,
+                            legendgroup = ~show,
+                            showlegend = FALSE,
+                            text = ~str_glue(
+                                "{show} s{str_pad(season, width = 2, side = 'left', pad = '0')}e{str_pad(episode, width = 2, side = 'left', pad = '0')} 
+                                 {title}: {rating}"
+                            ),
+                            hoverinfo = 'text'
+                        ) %>% 
+                        add_lines(
+                            data = data,
+                            name = ~show,
+                            y = ~loess,
+                            showlegend = showLegend,
+                            legendgroup = ~show, 
+                            text = ~legendgroup, hoverinfo = 'text',
+                            line = list(shape = 'spline', smoothing = 1.3)
+                        )
+                }
+                
+                ratingsChart <- p1 %>% layout(xaxis = list(title = ""),
+                              yaxis = list(title = 'Ratings'),
+                              title = str_glue("Episode ratings {chooseYear}"),
+                              legend = list(x = 100, y = 1))
+                # plot_ly(values$ratingsChartValues,
+                #         x = ~date, color = ~show, type = 'scatter',
+                #         mode = 'markers', showlegend = FALSE) %>% 
+                #     add_trace(y = ~rating, alpha = 0.4, legendgroup = ~str_glue("{show} s{season}"),
+                #               text = ~str_glue(
+                #                   "{show} 
+                #                   s{str_pad(season, width = 2, side = 'left', pad = '0')} 
+                #                   e{str_pad(episode, width = 2, side = 'left', pad = '0')} 
+                #                   {title}: {rating}"
+                #               ),
+                #               hoverinfo = 'text') %>% 
+                #     add_lines(y = ~rating, legendgroup = ~str_glue("{show} s{season}"),
+                #               showlegend = TRUE,
+                #               line = list(shape = 'spline', smoothing = 1.3)) %>% 
+                #     layout(xaxis = list(title = ""),
+                #            showlegend = TRUE,
+                #            yaxis = list(title = 'Ratings'),
+                #            title = str_glue("Episode ratings {chooseYear}"),
+                #            legend = list(x = 100, y = 1)
+                #     )
+            } else {
+                print('No lines on chart')
+                plot_ly(values$ratingsChartValues,
+                        x = ~date, y = ~rating, color = ~show, type = 'scatter', 
+                        mode = 'markers',
+                        colors = 'Spectral',
+                        text = ~str_glue(
+                                  "{show} 
+                                  s{str_pad(season, width = 2, side = 'left', pad = '0')} 
+                                  e{str_pad(episode, width = 2, side = 'left', pad = '0')} 
+                                  {title}: {rating}"
+                              ),
                         hoverinfo = 'text') %>% 
-                layout(xaxis = list(title = ""),
-                       showlegend = FALSE,
-                       yaxis = list(title = 'Ratings'),
-                       title = str_c("Episode Ratings for ", chooseYear),
-                       legend = list(orientation = 'h', xanchor = 'left', 
-                                     x = 0, yanchor = 'top', y = -0.05))
+                    layout(xaxis = list(title = ""),
+                           showlegend = FALSE,
+                           yaxis = list(title = 'Ratings'),
+                           title = str_glue("Episode ratings {chooseYear}")
+                    )
+            }
+            ratingsChart
         }
         
         
