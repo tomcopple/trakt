@@ -8,7 +8,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         token_url = "https://api.dropboxapi.com/oauth2/token",
         name = 'Rstudio_TC'
     )
-    dropboxToken <- readRDS('dropbox.RDS')
+    dropboxToken <- readRDS('dropbox.rds')
     
     
     if (refresh) {
@@ -47,7 +47,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         write_csv(images, 'images.csv')
         
         ## Dropbox authentication and save
-        dropbox <- readRDS('dropbox.RDS')
+        dropbox <- readRDS('dropbox.rds')
         
         reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
             req_oauth_refresh(client = dropboxClient, 
@@ -67,7 +67,7 @@ getBanners <- function(refresh = FALSE, slugs = NA, tvdb = NA) {
         
     } else {
         
-        dropbox <- readRDS('dropbox.RDS')
+        dropbox <- readRDS('dropbox.rds')
         
         reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
             req_oauth_refresh(client = dropboxClient, 

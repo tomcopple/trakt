@@ -8,7 +8,7 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         token_url = "https://api.dropboxapi.com/oauth2/token",
         name = 'Rstudio_TC'
     )
-    dropboxToken <- readRDS('dropbox.RDS')
+    dropboxToken <- readRDS('dropbox.rds')
     
     
     library(tidyverse);library(lubridate);library(stringr);library(httr2)

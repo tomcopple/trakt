@@ -1,15 +1,20 @@
 getMyRatings <- function(refresh = TRUE, accessCode) {
     
+    
     dropboxClient <- oauth_client(
         id = Sys.getenv('DROPBOX_KEY'),
         secret = Sys.getenv('DROPBOX_SECRET'),
         token_url = "https://api.dropboxapi.com/oauth2/token",
         name = 'Rstudio_TC'
     )
-    dropboxToken <- readRDS('dropbox.RDS')
+    dropboxToken <- readRDS('dropbox.rds')
+    
+    print(str_glue("Checking dropboxClient id ({dropboxClient$id}), token ({dropboxToken$refresh_token})"))
     
     require(tidyverse);require(lubridate);require(httr2)
     if (refresh) {
+        
+        print("Refreshing trakt ratings")
         # Create url
         baseurl <- "https://api.trakt.tv/users/"
         call <- "/ratings/episodes"
@@ -19,6 +24,7 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
         ))
         
         trakt_id <- Sys.getenv('TRAKTSHINY_ID')
+        print(str_glue("Checking trakt id: {trakt_id}, access code: {accessCode}"))
         
         
         # Set info for GET request. 
@@ -82,6 +88,8 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
         
         respUpload <- req_perform(reqUpload)
     } else {
+        
+        print("Downloading trakt ratings from Dropbox")
         
         reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
             req_oauth_refresh(client = dropboxClient, 

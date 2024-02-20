@@ -19,7 +19,7 @@ if (!shiny::isRunning()) {
 } 
 getwd()
 
-# Dropbox Authenticatio ---------------------------------------------------
+# Dropbox Authentication ---------------------------------------------------
 
 dropboxClient <- oauth_client(
     id = Sys.getenv('DROPBOX_KEY'),
@@ -32,44 +32,50 @@ dropboxClient <- oauth_client(
 #     dropboxClient, port = 43451,
 #     auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
 # )
-# saveRDS(dropboxToken, 'dropbox.RDS')
+# saveRDS(dropboxToken, 'dropbox.rds')
 print('Getting dropbox token')
-dropboxToken <- readRDS('dropbox.RDS')
+dropboxToken <- readRDS('dropbox.rds')
 exists(x = 'dropboxToken')
 
 print("Getting trakt token")
-# Environmental variables -------------------------------------------------
-# trakt_id <- Sys.getenv('TRAKTSHINY_ID')
-# print(str_c('trakt_id: ', trakt_id))
-# trakt_secret <- Sys.getenv('TRAKTSHINY_SECRET')
-# print(str_c('trakt_secret: ', trakt_secret))
-# traktUser <- Sys.getenv("TRAKT_USER")
-# print(str_c('traktUser: ', traktUser))
-# traktApi <- Sys.getenv('TRAKT_API')
-# print(str_c('traktApi: ', traktApi))
 
-### Get a token, don't need to do this every time?
-# traktClient <- oauth_client(
-#     id = Sys.getenv('TRAKTSHINY_ID'),
-#     secret = Sys.getenv('TRAKTSHINY_SECRET'),
-#     token_url = "https://api.trakt.tv/oauth/token",
-#     name = 'traktShiny'
-# )
-# 
-# traktToken <- oauth_flow_auth_code(
-#     traktClient, port = 43451,
-#     auth_url = "https://trakt.tv/oauth/authorize"
-# )
-
-# saveRDS(traktToken, 'traktToken.RDS')
-traktToken <- readRDS('traktToken.RDS')
-exists('traktToken')
+## See if traktToken exists first
+if (!file.exists('traktToken.RDS')) {
+    # Environmental variables -------------------------------------------------
+    trakt_id <- Sys.getenv('TRAKTSHINY_ID')
+    print(str_c('trakt_id: ', trakt_id))
+    trakt_secret <- Sys.getenv('TRAKTSHINY_SECRET')
+    print(str_c('trakt_secret: ', trakt_secret))
+    traktUser <- Sys.getenv("TRAKT_USER")
+    print(str_c('traktUser: ', traktUser))
+    traktApi <- Sys.getenv('TRAKT_API')
+    print(str_c('traktApi: ', traktApi))
+    
+    ### Get a token, don't need to do this every time?
+    traktClient <- oauth_client(
+        id = Sys.getenv('TRAKTSHINY_ID'),
+        secret = Sys.getenv('TRAKTSHINY_SECRET'),
+        token_url = "https://api.trakt.tv/oauth/token",
+        name = 'traktShiny'
+    )
+    
+    traktToken <- oauth_flow_auth_code(
+        traktClient, port = 43451,
+        auth_url = "https://trakt.tv/oauth/authorize"
+    )
+    
+    saveRDS(traktToken, 'traktToken.RDS')
+} else {
+    traktToken <- readRDS('traktToken.RDS')    
+}
 
 source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
 
 accessCode <- traktToken$access_token
+
+print(str_glue("Access code: {accessCode}"))
 
 print('Getting ratings')
 ratings <- getMyRatings(refresh = F, accessCode)
@@ -155,20 +161,12 @@ ui <- material_page(
                 width = 3,
                 material_card(
                     title = NULL,
-                    material_dropdown(
+                    material_radio_button(
                         input_id = "chooseShow",
                         label = "Choose show",
                         color = "DEEP_ORANGE",
                         choices = showList,
                         selected = first(history$show)
-                    )
-                ),
-                material_card(
-                    title = NULL,
-                    material_button(
-                        input_id = "refresh",
-                        label = "Refresh data",
-                        icon = "refresh"
                     )
                 )
             ),
@@ -176,6 +174,11 @@ ui <- material_page(
                 width = 9,
                 material_row(
                     uiOutput('bannerImage')
+                ),
+                material_row(
+                    material_card(
+                        title = "", plotlyOutput("showTimeSeries", height = "10%")
+                    )
                 ),
                 material_row(
                     material_card(
@@ -192,6 +195,14 @@ ui <- material_page(
     ### Maintenance Page UI ----
     material_tab_content(
         tab_id = "maintenance",
+        material_card(
+            title = NULL,
+            material_button(
+                input_id = "refresh",
+                label = "Refresh data",
+                icon = "refresh"
+            )
+        ),
         material_card(
             material_button('updateBanners', label = "Update show banners", icon = "refresh")
         )
@@ -378,26 +389,7 @@ server <- function(input, output, session) {
                               yaxis = list(title = 'Ratings'),
                               title = str_glue("Episode ratings {chooseYear}"),
                               legend = list(x = 100, y = 1))
-                # plot_ly(values$ratingsChartValues,
-                #         x = ~date, color = ~show, type = 'scatter',
-                #         mode = 'markers', showlegend = FALSE) %>% 
-                #     add_trace(y = ~rating, alpha = 0.4, legendgroup = ~str_glue("{show} s{season}"),
-                #               text = ~str_glue(
-                #                   "{show} 
-                #                   s{str_pad(season, width = 2, side = 'left', pad = '0')} 
-                #                   e{str_pad(episode, width = 2, side = 'left', pad = '0')} 
-                #                   {title}: {rating}"
-                #               ),
-                #               hoverinfo = 'text') %>% 
-                #     add_lines(y = ~rating, legendgroup = ~str_glue("{show} s{season}"),
-                #               showlegend = TRUE,
-                #               line = list(shape = 'spline', smoothing = 1.3)) %>% 
-                #     layout(xaxis = list(title = ""),
-                #            showlegend = TRUE,
-                #            yaxis = list(title = 'Ratings'),
-                #            title = str_glue("Episode ratings {chooseYear}"),
-                #            legend = list(x = 100, y = 1)
-                #     )
+                
             } else {
                 print('No lines on chart')
                 plot_ly(values$ratingsChartValues,
@@ -506,7 +498,9 @@ server <- function(input, output, session) {
         # Send img html tag for banner image, based on selected show
         # Some images don't seem to work...
         print(str_c("Getting banner image for ", chooseShow))
-        showSlug <- values$ratings %>% 
+        
+        ## Replacing ratings slug with history, as not every show has ratings, e.g. John Oliver
+        showSlug <- values$history %>% 
             filter(show == chooseShow) %>% 
             distinct(slug) %>% 
             pull(slug)
@@ -518,6 +512,64 @@ server <- function(input, output, session) {
         
     })
         
+    ### Show time series ----
+    
+    output$showTimeSeries <- renderPlotly({
+        
+        print("showTimeSeries")
+        chooseShow <- gsub("_shinymaterialdropdownspace_", " ", input$chooseShow)
+        # chooseShow <- "Last Week Tonight with John Oliver"
+        
+        
+        showHistory <- values$history %>% 
+            filter(show == chooseShow, season != 0) %>% 
+            mutate(date = as_date(date)) %>% 
+            count(season, date) %>% 
+            spread(key = season, value = n) %>% 
+            full_join(., tibble(
+                date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)
+            ), by = 'date') %>% 
+            gather(-date, key = season, value = n) %>% 
+            mutate(n = replace_na(n, 0)) %>% 
+            arrange(season, date) %>% 
+            group_by(season) %>% 
+            mutate(plays = c(cumsum(n[1:29]),
+                             zoo::rollsum(n, k = 30, align = 'right'))) %>% 
+            mutate(plays = ifelse(plays >= 60, 60, plays))
+        
+        showHistory %>% 
+            group_by(season) %>% 
+            plot_ly(type = 'scatter', mode = 'markers', colors = 'Set3') %>% 
+            add_trace(x = ~date, y = ~plays, color = ~season, mode = 'lines',
+                      fill = 'tozeroy',
+                      text = ~str_c("S", season, ": ", plays), hoverinfo = 'text') %>% 
+            # add_lines(data = values$history %>% 
+            #               filter(show == chooseShow) %>% 
+            #               mutate(date = as_date(date)) %>% 
+            #               count(date) %>% 
+            #               full_join(., tibble(
+            #                   date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)),
+            #                   by = 'date'
+            #               ) %>% 
+            #               mutate(n = replace_na(n, 0)) %>% 
+            #               arrange(date) %>% ungroup() %>% 
+            #               mutate(total = c(cumsum(n[1:29]), 
+            #                                zoo::rollsum(n, k = 30, align = 'right'))),
+            #           name = 'Total',
+            #           text = ~str_c("Total: ", total), hoverinfo = 'text',
+            #           line = list(color = I('yellow')),
+            #           x = ~date, y = ~total, yaxis = 'y2') %>% 
+            layout(xaxis = list(title = ""),
+                   yaxis = list(title = 'Monthly plays',
+                                rangemode = 'tozero'),
+                   # yaxis2 = list(title = 'Total', overlaying = 'y', side = 'right',
+                   #               rangemode = 'tozero'),
+                   title = "Total plays over time",
+                   legend = list(orientation = 'h', xanchor = 'left', x = 0,
+                                 yanchor = 'top', y = -0.05))    
+        
+    })
+    
     ### Show ratings plot ---- 
     
         output$showPlot <- renderPlotly({
