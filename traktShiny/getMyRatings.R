@@ -11,7 +11,7 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
     require(tidyverse);require(lubridate);require(httr2)
     if (refresh) {
         # Create url
-        baseurl <- "https://api-v2launch.trakt.tv/users/"
+        baseurl <- "https://api.trakt.tv/users/"
         call <- "/ratings/episodes"
         
         req <- request(base_url = str_glue(

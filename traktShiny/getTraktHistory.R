@@ -16,7 +16,7 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
     if (refresh) {
         
         # Create url
-        baseurl <- "https://api-v2launch.trakt.tv/users/"
+        baseurl <- "https://api.trakt.tv/users/"
         call <- "/history/episodes?limit=100000"
         
         req <- request(base_url = str_glue(
