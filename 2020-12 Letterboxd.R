@@ -190,8 +190,8 @@ tags <- diary %>%
     mutate(tags = str_remove_all(tags, 'home')) %>% 
     mutate(tags = str_remove_all(tags, '^, '),
            tags = str_remove_all(tags, ', $')) %>% 
-    select(-title, -rating) %>% 
-    gather(-date, key = key, value = value) %>% 
+    # select(-title) %>% 
+    gather(-date, -title, -rating, key = key, value = value) %>% 
     select(-key) %>% 
     na.omit()
 
