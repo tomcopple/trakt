@@ -166,7 +166,11 @@ ui <- material_page(
                         label = "Choose show",
                         color = "DEEP_ORANGE",
                         choices = showList,
-                        selected = first(history$show)
+                        selected = history %>% 
+                            distinct(show, title) %>%
+                            group_by(show) %>% 
+                            filter(n() > 3) %>% 
+                            pull('show') %>% first(.)
                     )
                 )
             ),
