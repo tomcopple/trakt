@@ -64,6 +64,14 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
                 season = ifelse(show == "Archer" & season == 0,
                                 3, season)
             ) %>% 
+            ## Want to include new Doctor Who as continuation of previous
+            mutate(
+                season = ifelse(
+                    slug == 'doctor-who-2024',
+                    season + 13,
+                    season
+                )
+            ) %>% 
             ## Don't include specials
             filter(season != 0) %>% 
             ## And filter out shows with only one rating
