@@ -523,15 +523,18 @@ server <- function(input, output, session) {
         print("showTimeSeries")
         chooseShow <- gsub("_shinymaterialdropdownspace_", " ", input$chooseShow)
         # chooseShow <- "Last Week Tonight with John Oliver"
+        filterHistory <- values$history %>% 
+            filter(show == chooseShow, season != 0)
+        minDate <- min(filterHistory$date)
+        maxDate <- max(filterHistory$date)
         
-        
-        showHistory <- values$history %>% 
-            filter(show == chooseShow, season != 0) %>% 
+        showHistory <- filterHistory %>% 
             mutate(date = as_date(date)) %>% 
             count(season, date) %>% 
             spread(key = season, value = n) %>% 
             full_join(., tibble(
-                date = seq.Date(from = values$minDate, to = values$maxDate, by = 1)
+                date = seq.Date(from = as_date(minDate), 
+                                to = as_date(maxDate), by = 1)
             ), by = 'date') %>% 
             gather(-date, key = season, value = n) %>% 
             mutate(n = replace_na(n, 0)) %>% 

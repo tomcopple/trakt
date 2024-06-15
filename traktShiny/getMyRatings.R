@@ -67,7 +67,7 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
             ## Want to include new Doctor Who as continuation of previous
             mutate(
                 season = ifelse(
-                    slug == 'doctor-who-2024',
+                    slug == 'doctor-who-2024' & season != 0,
                     season + 13,
                     season
                 )
