@@ -21,6 +21,7 @@ getwd()
 
 # Dropbox Authentication ---------------------------------------------------
 
+print('Getting dropbox token')
 dropboxClient <- oauth_client(
     id = Sys.getenv('DROPBOX_KEY'),
     secret = Sys.getenv('DROPBOX_SECRET'),
@@ -28,81 +29,44 @@ dropboxClient <- oauth_client(
     name = 'Rstudio_TC'
 )
 
-traktClient <- oauth_client(
-    id = Sys.getenv('TRAKTSHINY_ID'),
-    secret = Sys.getenv('TRAKTSHINY_SECRET'),
-    token_url = "https://api.trakt.tv/oauth/token",
-    name = 'traktShiny'
-)
-
 # dropboxToken <- oauth_flow_auth_code(
 #     dropboxClient, port = 43451,
 #     auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
 # )
 # saveRDS(dropboxToken, 'dropbox.rds')
-print('Getting dropbox token')
 dropboxToken <- readRDS('dropbox.rds')
 exists(x = 'dropboxToken')
 
-print("Getting trakt token")
+# Trakt Authentication ----------------------------------------------------
+print('Getting Trakt token')
+traktClient <- oauth_client(
+    id = Sys.getenv('TRAKTSHINY_ID'),
+    secret = Sys.getenv('TRAKTSHINY_SECRET'),
+    token_url = 'https://api.trakt.tv/oauth/token',
+    name = 'traktShiny'
+    )
 
-## See if traktToken exists first
-if (!file.exists('traktToken.RDS')) {
-    # Environmental variables -------------------------------------------------
-    trakt_id <- Sys.getenv('TRAKTSHINY_ID')
-    print(str_c('trakt_id: ', trakt_id))
-    trakt_secret <- Sys.getenv('TRAKTSHINY_SECRET')
-    print(str_c('trakt_secret: ', trakt_secret))
-    traktUser <- Sys.getenv("TRAKT_USER")
-    print(str_c('traktUser: ', traktUser))
-    traktApi <- Sys.getenv('TRAKT_API')
-    print(str_c('traktApi: ', traktApi))
-    
-    ### Get a token, don't need to do this every time?
-    
-    trakt_client <- function() {
-        httr2::oauth_client(
-            traktClient 
-        )
-    }
-    req_trakt <- function() {
-        req_oauth_auth_code(
-            client = trakt_client(),
-            port = 43451,
-            auth_url = "https://trakt.tv/oauth/authorize",
-            cache_disk = TRUE
-        )
-    } 
-    
-    traktToken <- oauth_flow_auth_code(
-        traktClient, 
-        port = 43451,
-        auth_url = "https://trakt.tv/oauth/authorize"
-    )
-    
-    saveRDS(traktToken, 'traktToken.RDS')
-} else {
-    traktToken <- readRDS('traktToken.RDS')  
-    traktToken <- httr2::oauth_flow_refresh(
-        client = traktClient,
-        refresh_token = traktToken$refresh_token
-    )
-    saveRDS(traktToken, 'traktToken.RDS')
-}
+# traktToken <- oauth_flow_auth_code(
+#     client = traktClient,
+#     auth_url = 'https://trakt.tv/oauth/authorize',
+#     redirect_uri = 'http://localhost:43451/'
+# )
+# saveRDS(traktToken, 'trakt.rds')
+traktToken <- readRDS('trakt.rds')
+exists(x = 'traktToken')
+
+
+# Get everything else -----------------------------------------------------
 
 source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
 
 
-accessCode <- traktToken$access_token
-
-print(str_glue("Access code: {accessCode}"))
-
 print('Getting ratings')
-ratings <- getMyRatings(refresh = F, accessCode)
+ratings <- getMyRatings(refresh = F)
 print('Got ratings, getting history')
-history <- getTraktHistory(refresh = F, accessCode)
+history <- getTraktHistory(refresh = F)
 print('Got history, getting banners')
 images <- getBanners(refresh = F)
 print('Got banners')
@@ -250,8 +214,8 @@ server <- function(input, output, session) {
             material_spinner_show(session, 'showPlot')
             material_spinner_show(session, 'ratingsPlot')
             shiny::showNotification("Refreshing data, may take some time...", type = "default")
-            values$ratings <- getMyRatings(refresh = TRUE, accessCode)
-            values$history <- getTraktHistory(refresh = TRUE, accessCode)
+            values$ratings <- getMyRatings(refresh = TRUE)
+            values$history <- getTraktHistory(refresh = TRUE)
             shiny::showNotification("Done!", type = "message")
             material_spinner_hide(session, "showPlot")
             material_spinner_hide(session, "ratingsPlot")

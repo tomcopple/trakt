@@ -1,6 +1,6 @@
 ## Download all trakt scrobbles, and save local copy
 
-getTraktHistory <- function(refresh = TRUE, accessCode) {
+getTraktHistory <- function(refresh = TRUE) {
     
     dropboxClient <- oauth_client(
         id = Sys.getenv('DROPBOX_KEY'),
@@ -9,6 +9,15 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         name = 'Rstudio_TC'
     )
     dropboxToken <- readRDS('dropbox.rds')
+    
+    traktClient <- oauth_client(
+        id = Sys.getenv('TRAKTSHINY_ID'),
+        secret = Sys.getenv('TRAKTSHINY_SECRET'),
+        token_url = 'https://api.trakt.tv/oauth/token',
+        name = 'traktShiny'
+    )
+    traktToken <- readRDS('trakt.rds')
+    
     
     
     library(tidyverse);library(lubridate);library(stringr);library(httr2)
@@ -26,7 +35,9 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         trakt_id <- Sys.getenv('TRAKTSHINY_ID')
         
         req2 <- req %>% 
-            req_auth_bearer_token(accessCode) %>% 
+            req_oauth_refresh(client = traktClient, 
+                              refresh_token = traktToken$refresh_token) %>% 
+            # req_auth_bearer_token(accessCode) %>% 
             req_headers(
                 "trakt-api-key" = trakt_id,
                 "Content-Type" = "application/json",

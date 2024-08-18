@@ -5,10 +5,8 @@ account: tomcopple
 server: shinyapps.io
 hostUrl: https://api.shinyapps.io/v1
 appId: 2627435
-bundleId: 5456578
+bundleId: 8962688
 url: https://tomcopple.shinyapps.io/traktShiny/
-when: 1641917976.00107
-lastSyncTime: 1641917976.0011
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: 2021-03-31-traktHistory.csv|2021-04-05-traktHistory.csv|2021-04-06-traktHistory.csv|2021-08-10-traktHistory.csv|2021-09-24-traktHistory.csv|2021-12-15-traktHistory.csv|setTrakt.R
+ignoredFiles: 2024-06-15-traktHistory.csv|2024-08-08-traktHistory.csv

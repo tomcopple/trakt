@@ -1,4 +1,4 @@
-getMyRatings <- function(refresh = TRUE, accessCode) {
+getMyRatings <- function(refresh = TRUE) {
     
     
     dropboxClient <- oauth_client(
@@ -9,6 +9,14 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
     )
     dropboxToken <- readRDS('dropbox.rds')
     
+    traktClient <- oauth_client(
+        id = Sys.getenv('TRAKTSHINY_ID'),
+        secret = Sys.getenv('TRAKTSHINY_SECRET'),
+        token_url = 'https://api.trakt.tv/oauth/token',
+        name = 'traktShiny'
+    )
+    traktToken <- readRDS('trakt.rds')
+
     print(str_glue("Checking dropboxClient id ({dropboxClient$id}), token ({dropboxToken$refresh_token})"))
     
     require(tidyverse);require(lubridate);require(httr2)
@@ -24,12 +32,14 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
         ))
         
         trakt_id <- Sys.getenv('TRAKTSHINY_ID')
-        print(str_glue("Checking trakt id: {trakt_id}, access code: {accessCode}"))
-        
+        # print(str_glue("Checking trakt id: {trakt_id}, access code: {accessCode}"))
         
         # Set info for GET request. 
         req2 <- req %>% 
-            req_auth_bearer_token(accessCode) %>%
+            req_oauth_refresh(client = traktClient, 
+                              refresh_token = traktToken$refresh_token) %>% 
+            # req_oauth_auth_code(req_trakt) %>% 
+            # req_auth_bearer_token(accessCode) %>%
             req_headers(
                 "trakt-api-key" = trakt_id,
                 "Content-Type" = "application/json",
@@ -37,6 +47,8 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
             )
         
         resp <- req_perform(req2)
+        
+        print('Performed req')
         
         ratings <- resp_body_json(resp) %>% 
             map_df(function(x) {
