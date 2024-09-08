@@ -43,7 +43,7 @@ dropboxClient <- oauth_client(
 dropboxToken <- readRDS('dropbox.RDS')
 
 testing <- F
-
+ 
 if (!testing) {
     
     ## Download letterboxd diary from dropbox
@@ -152,7 +152,8 @@ getGoodreads <- function() {
 
 newGoodreads <- getGoodreads()
 goodreads <- bind_rows(goodreads, newGoodreads) %>% distinct() %>% 
-    arrange(desc(date_finished))
+    arrange(desc(date_finished)) %>% 
+    select(1,2,3,4,5)
 ```
 
 Letterboxd
