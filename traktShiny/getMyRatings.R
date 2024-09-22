@@ -36,9 +36,13 @@ getMyRatings <- function(refresh = TRUE) {
         
         # Set info for GET request. 
         req2 <- req %>% 
-            req_oauth_refresh(client = traktClient, 
-                              refresh_token = traktToken$refresh_token) %>% 
-            # req_oauth_auth_code(req_trakt) %>% 
+            # req_oauth_refresh(client = traktClient, 
+                              # refresh_token = traktToken$refresh_token) %>% 
+            req_oauth_auth_code(
+                client = traktClient,
+                auth_url = 'https://trakt.tv/oauth/authorize',
+                redirect_uri = 'http://localhost:43451/'
+                ) %>%
             # req_auth_bearer_token(accessCode) %>%
             req_headers(
                 "trakt-api-key" = trakt_id,
@@ -91,9 +95,15 @@ getMyRatings <- function(refresh = TRUE) {
         
         write_csv(ratings, 'traktRatings.csv')
         
+        print("Uploading to Dropbox")
         reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-            req_oauth_refresh(client = dropboxClient, 
-                              refresh_token = dropboxToken$refresh_token) %>% 
+            req_oauth_auth_code(
+                client = dropboxClient,
+                auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline",
+                redirect_uri = 'http://localhost:43451/'
+            ) %>%
+            # req_oauth_refresh(client = dropboxClient, 
+                              # refresh_token = dropboxToken$refresh_token) %>% 
             # req_auth_bearer_token(dropboxToken$refresh_token) %>% 
             req_headers('Content-Type' = 'application/octet-stream') %>% 
             req_headers(

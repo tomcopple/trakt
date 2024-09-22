@@ -52,7 +52,9 @@ traktClient <- oauth_client(
 #     redirect_uri = 'http://localhost:43451/'
 # )
 # saveRDS(traktToken, 'trakt.rds')
-traktToken <- readRDS('trakt.rds')
+# traktToken <- readRDS('trakt.rds')
+
+
 exists(x = 'traktToken')
 
 

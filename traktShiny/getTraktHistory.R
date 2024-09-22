@@ -35,8 +35,13 @@ getTraktHistory <- function(refresh = TRUE) {
         trakt_id <- Sys.getenv('TRAKTSHINY_ID')
         
         req2 <- req %>% 
-            req_oauth_refresh(client = traktClient, 
-                              refresh_token = traktToken$refresh_token) %>% 
+            req_oauth_auth_code(
+                client = traktClient,
+                auth_url = 'https://trakt.tv/oauth/authorize',
+                redirect_uri = 'http://localhost:43451/'
+            ) %>%
+            # req_oauth_refresh(client = traktClient, 
+                              # refresh_token = traktToken$refresh_token) %>% 
             # req_auth_bearer_token(accessCode) %>% 
             req_headers(
                 "trakt-api-key" = trakt_id,
