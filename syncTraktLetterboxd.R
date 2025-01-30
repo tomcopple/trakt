@@ -4,7 +4,7 @@ source('traktShiny/setTrakt.R')
 
 # 1. Get Trakt Movie History ----------------------------------------------
 
-traktRawHis <- httr::GET(url = 'https://api.trakt.tv/users/tomcopple/watched/movies',
+traktRawHis <- httr::GET(url = 'https://api.trakt.tv/users/tomcopple/history/movies',
                     headers)
 httr::stop_for_status(traktRawHis)
 traktHis <- httr::content(traktRawHis, as = 'text') %>% 
