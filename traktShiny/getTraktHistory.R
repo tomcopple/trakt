@@ -1,6 +1,11 @@
 ## Download all trakt scrobbles, and save local copy
+## Testing if it works with the old jemus42 tRakt package
+
 
 getTraktHistory <- function(refresh = TRUE) {
+    
+    library(tRakt)
+    library(tidyverse);library(lubridate);library(stringr);library(httr2)
     
     dropboxClient <- oauth_client(
         id = Sys.getenv('DROPBOX_KEY'),
@@ -10,61 +15,24 @@ getTraktHistory <- function(refresh = TRUE) {
     )
     dropboxToken <- readRDS('dropbox.rds')
     
-    traktClient <- oauth_client(
-        id = Sys.getenv('TRAKTSHINY_ID'),
-        secret = Sys.getenv('TRAKTSHINY_SECRET'),
-        token_url = 'https://api.trakt.tv/oauth/token',
-        name = 'traktShiny'
-    )
-    traktToken <- readRDS('trakt.rds')
     
-    
-    
-    library(tidyverse);library(lubridate);library(stringr);library(httr2)
-
     if (refresh) {
         
-        # Create url
-        baseurl <- "https://api.trakt.tv/users/"
-        call <- "/history/episodes?limit=100000"
+        testHist <- tRakt::user_history(
+            type = 'shows', start_at = "2011-01-01", end_at = lubridate::today(), limit = 25000
+        )
         
-        req <- request(base_url = str_glue(
-            "{baseurl}me{call}"
-        ))
-        
-        trakt_id <- Sys.getenv('TRAKTSHINY_ID')
-        
-        req2 <- req %>% 
-            req_oauth_auth_code(
-                client = traktClient,
-                auth_url = 'https://trakt.tv/oauth/authorize',
-                redirect_uri = 'http://localhost:43451/'
-            ) %>%
-            # req_oauth_refresh(client = traktClient, 
-                              # refresh_token = traktToken$refresh_token) %>% 
-            # req_auth_bearer_token(accessCode) %>% 
-            req_headers(
-                "trakt-api-key" = trakt_id,
-                "Content-Type" = "application/json",
-                "trakt-api-version" = 2
-            )
-        
-        resp <- req_perform(req2)
-        
-        history <- resp_body_json(resp) %>% 
-            map_df(function(x) {
-                df <- tibble(
-                    date = x$watched_at,
-                    id = x$id,
-                    title = x$episode$title,
-                    show = x$show$title,
-                    season = x$episode$season,
-                    episode = x$episode$number,
-                    slug = x$show$ids$slug,
-                    tvdb = x$show$ids$tvdb
-                )
-                return(df)
-            }) %>% 
+        history <- testHist %>% 
+            select(
+                date = watched_at,
+                id = id,
+                title = episode_title,
+                show = title,
+                season = episode_season,
+                episode = episode_episode,
+                slug = slug,
+                tvdb = tvdb
+            ) %>% 
             mutate(date = ymd_hms(date))
         
         
