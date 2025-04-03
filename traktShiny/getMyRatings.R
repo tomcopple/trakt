@@ -1,6 +1,14 @@
 getMyRatings <- function(refresh = TRUE) {
     
+    ## Check if running locally
+    isLocal <- Sys.getenv('SHINY_PORT') == ""
+    print(ifelse(isLocal, "Running locally",
+                 str_glue("Running on Shiny port {Sys.getenv('SHINY_PORT')}")))    
     
+    ## Check if running interactively
+    print(str_glue("Is interactive: {rlang::is_interactive()}"))
+    
+    ## Auth clients
     dropboxClient <- oauth_client(
         id = Sys.getenv('DROPBOX_KEY'),
         secret = Sys.getenv('DROPBOX_SECRET'),
@@ -15,7 +23,15 @@ getMyRatings <- function(refresh = TRUE) {
         token_url = 'https://api.trakt.tv/oauth/token',
         name = 'traktShiny'
     )
-    traktToken <- readRDS('trakt.rds')
+    # traktToken <- readRDS('trakt.rds')
+    
+    req_trakt <- function(req) {
+        req_oauth_refresh(
+            req = req,
+            client = traktClient,
+            refresh_token = Sys.getenv('TRAKTSHINY_REFRESH')
+        )
+    }
 
     print(str_glue("Checking dropboxClient id ({dropboxClient$id}), token ({dropboxToken$refresh_token})"))
     
@@ -36,12 +52,14 @@ getMyRatings <- function(refresh = TRUE) {
         
         # Set info for GET request. 
         req2 <- req %>% 
+            # req_trakt() %>% 
             # req_oauth_refresh(client = traktClient, 
                               # refresh_token = traktToken$refresh_token) %>% 
             req_oauth_auth_code(
                 client = traktClient,
                 auth_url = 'https://trakt.tv/oauth/authorize',
-                redirect_uri = 'http://localhost:43451/'
+                redirect_uri = 'http://localhost:43451',
+                cache_disk = TRUE
                 ) %>%
             # req_auth_bearer_token(accessCode) %>%
             req_headers(
@@ -117,6 +135,7 @@ getMyRatings <- function(refresh = TRUE) {
             req_body_file(path = 'traktRatings.csv')
         
         respUpload <- req_perform(reqUpload)
+        print("Uploaded to dropbox")
     } else {
         
         print("Downloading trakt ratings from Dropbox")
