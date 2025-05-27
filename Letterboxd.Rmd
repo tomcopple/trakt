@@ -81,7 +81,11 @@ diary <- readr::read_csv('diary.csv', show_col_types = FALSE) %>%
 
 goodreads <- readr::read_csv('goodreads.csv', show_col_types = FALSE) %>%
     mutate(date_started= lubridate::ymd(date_started),
-           date_finished =lubridate::ymd(date_finished))
+           date_finished =lubridate::ymd(date_finished)) %>% 
+    mutate(author = ifelse(str_detect(author, ", "), 
+                           str_c(str_extract(author, "(?<=, ).*$"), 
+                                 str_extract(author, "^.*(?=, )"), sep = " "), 
+                           author))
 
 
 
