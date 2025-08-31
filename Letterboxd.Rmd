@@ -516,6 +516,7 @@ observeEvent(eventExpr = input$selectGrYear,
                    mutate(n = replace_na(n, 0)) %>% 
                    mutate(read = cumsum(n)) %>% 
                    mutate(target = row_number()) %>% 
+                         mutate(target2 = ifelse(weekDate <= today(), target, NA)) %>% 
                    select(-n) %>% mutate(read = ifelse(weekDate >= lubridate::today(), NA, read)) %>% 
                    gather(-weekDate, key = series, value = count)
                  glimpse(rv$goodreadsC2)
@@ -540,7 +541,8 @@ renderPlot({
     mutate(date_started = ifelse(
       year(date_started) < year(date_finished),
       lubridate::ymd(str_c(year(date_finished), "-01-01")),
-      date_started)) %>% 
+      date_started - 1)) %>% 
+        
     mutate(date_started= as_date(date_started)) %>% 
     gather(-title, -author, -rating, key = date_type, value = date) %>% 
     ggplot() +
@@ -569,9 +571,14 @@ C2 Cumulative {data-width=650, data-height = 300}
 ```{r}
 renderPlot({
   rv$goodreadsC2 %>% 
-  ggplot(aes(x = weekDate, y = count, color = series, group = series)) +
-  geom_line(linewidth = 1.2) +
-  theme(legend.title = element_blank()) +
+  ggplot(aes(x = weekDate, y = count, color = series, group = series, linetype = series)) +
+    geom_line(linewidth = 1.2) +
+    scale_color_manual(values = c('read' = '#F8766D', 'target' = '#00BFC4', 'target2' = '#00BFC4'),
+                       breaks = c('read', 'target')) +
+    # scale_linewidth_manual( values = c(1.2, 0.8, 1.2)) +
+    scale_linetype_manual(values = c('read' = 'solid', 'target' = 'dotted', 'target2' = 'solid'),
+                          breaks = c('read', 'target')) +
+    theme(legend.title = element_blank()) +
     xlab(NULL) + ylab(NULL) +
     theme(text = element_text(size = 16))
 })
