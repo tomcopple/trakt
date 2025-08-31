@@ -43,7 +43,7 @@ dropboxClient <- oauth_client(
 dropboxToken <- readRDS('dropbox.RDS')
 
 testing <- F
-
+ 
 if (!testing) {
     
     ## Download letterboxd diary from dropbox
@@ -81,7 +81,11 @@ diary <- readr::read_csv('diary.csv', show_col_types = FALSE) %>%
 
 goodreads <- readr::read_csv('goodreads.csv', show_col_types = FALSE) %>%
     mutate(date_started= lubridate::ymd(date_started),
-           date_finished =lubridate::ymd(date_finished))
+           date_finished =lubridate::ymd(date_finished)) %>% 
+    mutate(author = ifelse(str_detect(author, ", "), 
+                           str_c(str_extract(author, "(?<=, ).*$"), 
+                                 str_extract(author, "^.*(?=, )"), sep = " "), 
+                           author))
 
 
 
@@ -101,58 +105,67 @@ letFeed <- xml2::read_xml("https://letterboxd.com/tomcopple/rss/") %>%
 let <- bind_rows(diary, letFeed) %>% arrange(desc(date))
 
 ## Get any new books from Goodreads website
+## NB from 2024 onwards get data from Hardcover API, not goodreads
+getHardcover <- function() {
+    baseurl <- "https://api.hardcover.app/v1/graphql"
+token <- Sys.getenv('HARDCOVER_BEARER')
 
-getGoodreads <- function() {
-    baseurl <- "https://www.goodreads.com/review/list/5381064?ref=nav_mybooks&page=1"
-
-  rawTab <- read_html(baseurl) %>% 
-    html_elements(".bookalike.review")
-  
-  booksTab <- tibble(
-    title = rawTab %>% 
-      html_element(".title a") %>% 
-      html_text2(),
-    author = rawTab %>% 
-      html_element('.author a') %>% 
-      html_text2(),
-    rating = rawTab %>% 
-      html_element(".rating .value span") %>% 
-      html_attr(name = 'title'),
-    ## Think there's a bug where if date is the first of the month, it doesn't show
-    date_started_text = rawTab %>% 
-      html_element('.date_started_value') %>% 
-      html_text2(),
-    date_finished_text = rawTab %>% 
-      html_element('.date_read_value') %>% 
-      html_text2()
-  )
-  
-  cleanTab <- booksTab %>% 
-    mutate(rating = case_when(
-      rating == 'did not like it' ~ 1,
-      rating == 'it was ok' ~ 2,
-      rating == 'liked it' ~ 3,
-      rating == 'really liked it' ~ 4,
-      rating == 'it was amazing' ~ 5
-    )) %>% 
-    mutate(date_started = ifelse(nchar(date_started_text) == 12,
-                                 lubridate::mdy(date_started_text),
-                                 lubridate::dmy(str_c("01 ", date_started_text))),
-           date_finished = ifelse(nchar(date_finished_text) == 12,
-                                  lubridate::mdy(date_finished_text),
-                                  lubridate::dmy(str_c("01 ", date_finished_text))),
-           .keep = 'unused'
+req <- request(baseurl) %>% 
+    req_headers(
+        # `content-type` = "application/json",
+        Authorization = str_glue("Bearer {token}")
     ) %>% 
-    mutate(date_started = as_date(date_started),
-           date_finished = as_date(date_finished)) %>% 
-    filter()
-  
-  return(cleanTab)
+    req_body_json(list(
+        "query" = "query {
+        me {
+            user_books(
+                order_by: {last_read_date: desc_nulls_last}
+                where: {status_id: {_eq: 3}, last_read_date: {_gte: \"2024-01-01\"}}
+            ) {
+                book {
+                    contributions(limit: 1) {
+                        author {
+                            name
+                        }
+                    }
+                    title
+                }
+                user_book_reads {
+                    finished_at
+                    started_at
+                    user_book {
+                        rating
+                    }
+                }
+                user {
+                    id
+                }
+            }
+     }
+        }"
+    ))
+
+resp <- req_perform(req)
+cleanResp <- resp %>% 
+    resp_body_json(simplifyVector = T) %>% 
+    pluck('data', 'me', 'user_books', 1) %>% 
+    unnest(c('book', 'user_book_reads')) %>% 
+    unnest(c('contributions', 'user_book')) %>% 
+    unnest('author') %>% 
+    select(author = 1, title = 2, date_finished = 3, date_started = 4, rating = 5) %>%
+    mutate(date_finished = lubridate::ymd(date_finished),
+           date_started = lubridate::ymd(date_started)) %>% 
+    distinct()
+
+return(cleanResp)
 }
 
-newGoodreads <- getGoodreads()
-goodreads <- bind_rows(goodreads, newGoodreads) %>% distinct() %>% 
-    arrange(desc(date_finished))
+newGoodreads <- getHardcover()
+goodreads <- bind_rows(
+    filter(goodreads, date_finished < "2024-01-01"),
+    newGoodreads) %>% distinct() %>% 
+    arrange(desc(date_finished)) %>% 
+    select(1,2,3,4,5)
 ```
 
 Letterboxd
@@ -469,8 +482,10 @@ rv$goodreads <- goodreads %>% filter(year(date_finished) >= 2011)
 
 observeEvent(eventExpr = input$refreshGoodreads,
              handlerExpr = {
-                 newGoodreads <- getGoodreads()
-                 rv$goodreads <- bind_rows(goodreads, newGoodreads) %>% distinct() %>% 
+                 newGoodreads <- getHardcover()
+                 rv$goodreads <- bind_rows(
+                     filter(goodreads, date_finished < "2024-01-01"),
+                     newGoodreads) %>% distinct() %>% 
                      arrange(desc(date_finished)) %>% 
                      filter(year(date_finished) >= 2011)
                  
@@ -571,14 +586,11 @@ C2 Cumulative {data-width=650, data-height = 300}
 ```{r}
 renderPlot({
   rv$goodreadsC2 %>% 
-  ggplot(aes(x = weekDate, y = count, color = series, group = series, linetype = series)) +
-    geom_line(linewidth = 1.2) +
-    scale_color_manual(values = c('read' = '#F8766D', 'target' = '#00BFC4', 'target2' = '#00BFC4'),
-                       breaks = c('read', 'target')) +
-    # scale_linewidth_manual( values = c(1.2, 0.8, 1.2)) +
-    scale_linetype_manual(values = c('read' = 'solid', 'target' = 'dotted', 'target2' = 'solid'),
-                          breaks = c('read', 'target')) +
-    theme(legend.title = element_blank()) +
+  ggplot(aes(x = weekDate, y = count, color = series, group = series)) +
+  # geom_line(linewidth = 1.2) +
+        geom_point(data = subset(rv$goodreadsC2, series == 'read'), alpha = 0.5) +
+        stat_smooth(se = FALSE) + 
+  theme(legend.title = element_blank()) +
     xlab(NULL) + ylab(NULL) +
     theme(text = element_text(size = 16))
 })
