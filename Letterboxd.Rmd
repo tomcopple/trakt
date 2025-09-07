@@ -20,7 +20,8 @@ suppressPackageStartupMessages({
     library(httr2)
     library(plotly)
     library(zoo)
-    library(rvest)    
+    library(rvest)  
+    library(scales)
 })
 
 readRenviron('.Renviron')
@@ -530,9 +531,11 @@ observeEvent(eventExpr = input$selectGrYear,
                    arrange(weekDate) %>%
                    mutate(n = replace_na(n, 0)) %>% 
                    mutate(read = cumsum(n)) %>% 
-                   mutate(target = row_number()) %>% 
-                         mutate(target2 = ifelse(weekDate <= today(), target, NA)) %>% 
-                   select(-n) %>% mutate(read = ifelse(weekDate >= lubridate::today(), NA, read)) %>% 
+                   mutate(
+                       target = ifelse(weekDate <= today(), row_number(), NA),
+                       target2 = ifelse(weekDate >= today(), row_number(), NA)) %>% 
+                   select(-n) %>% 
+                     mutate(read = ifelse(weekDate >= lubridate::today(), NA, read)) %>% 
                    gather(-weekDate, key = series, value = count)
                  glimpse(rv$goodreadsC2)
                  })
@@ -586,10 +589,13 @@ C2 Cumulative {data-width=650, data-height = 300}
 ```{r}
 renderPlot({
   rv$goodreadsC2 %>% 
-  ggplot(aes(x = weekDate, y = count, color = series, group = series)) +
+  ggplot(aes(x = weekDate, y = count, color = series, linetype = series, group = series)) +
   # geom_line(linewidth = 1.2) +
         geom_point(data = subset(rv$goodreadsC2, series == 'read'), alpha = 0.5) +
         stat_smooth(se = FALSE) + 
+        scale_color_manual(values = c(scales::hue_pal()(2)[1:2],
+                                      scales::hue_pal()(2)[2])) +
+        scale_linetype_manual(values = (c('solid', 'solid', 'dotted')))+
   theme(legend.title = element_blank()) +
     xlab(NULL) + ylab(NULL) +
     theme(text = element_text(size = 16))
