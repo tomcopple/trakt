@@ -8,8 +8,6 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         token_url = "https://api.dropboxapi.com/oauth2/token",
         name = 'Rstudio_TC'
     )
-    dropboxToken <- readRDS('dropbox.rds')
-    
     
     library(tidyverse);library(lubridate);library(stringr);library(httr2)
 
@@ -26,7 +24,8 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         trakt_id <- Sys.getenv('TRAKTSHINY_ID')
         
         req2 <- req %>% 
-            req_auth_bearer_token(accessCode) %>% 
+            reqAuthTrakt() %>% 
+            # req_auth_bearer_token(accessCode) %>% 
             req_headers(
                 "trakt-api-key" = trakt_id,
                 "Content-Type" = "application/json",
@@ -68,8 +67,9 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
         write_csv(history, 'traktHistory.csv')
         
         reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-            req_oauth_refresh(client = dropboxClient, 
-                              refresh_token = dropboxToken$refresh_token) %>% 
+            reqAuthDropbox() %>% 
+            # req_oauth_refresh(client = dropboxClient, 
+                              # refresh_token = dropboxToken$refresh_token) %>% 
             # req_auth_bearer_token(dropboxToken$refresh_token) %>% 
             req_headers('Content-Type' = 'application/octet-stream') %>% 
             req_headers(
@@ -87,8 +87,9 @@ getTraktHistory <- function(refresh = TRUE, accessCode) {
     } else {
     
         reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
-            req_oauth_refresh(client = dropboxClient, 
-                              refresh_token = dropboxToken$refresh_token) %>% 
+            reqAuthDropbox() %>% 
+            # req_oauth_refresh(client = dropboxClient, 
+                              # refresh_token = dropboxToken$refresh_token) %>% 
             req_method('POST') %>%
             req_headers(
                 'Dropbox-API-Arg' = str_c('{',

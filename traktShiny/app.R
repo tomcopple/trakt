@@ -28,19 +28,28 @@ dropboxClient <- oauth_client(
     name = 'Rstudio_TC'
 )
 
+reqAuthDropbox <- function(req) {
+    req_oauth_auth_code(
+        req, 
+        client = dropboxClient,
+        auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
+    )
+}
+    
+    
+
 # dropboxToken <- oauth_flow_auth_code(
 #     dropboxClient, port = 43451,
 #     auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
 # )
 # saveRDS(dropboxToken, 'dropbox.rds')
-print('Getting dropbox token')
-dropboxToken <- readRDS('dropbox.rds')
-exists(x = 'dropboxToken')
+# print('Getting dropbox token')
+# dropboxToken <- readRDS('dropbox.rds')
+# exists(x = 'dropboxToken')
 
 print("Getting trakt token")
 
 ## See if traktToken exists first
-if (!file.exists('traktToken.RDS')) {
     # Environmental variables -------------------------------------------------
     trakt_id <- Sys.getenv('TRAKTSHINY_ID')
     print(str_c('trakt_id: ', trakt_id))
@@ -59,15 +68,16 @@ if (!file.exists('traktToken.RDS')) {
         name = 'traktShiny'
     )
     
-    traktToken <- oauth_flow_auth_code(
-        traktClient, port = 43451,
-        auth_url = "https://trakt.tv/oauth/authorize"
-    )
-    
-    saveRDS(traktToken, 'traktToken.RDS')
-} else {
-    traktToken <- readRDS('traktToken.RDS')    
-}
+    reqAuthTrakt <- function(req) {
+        req_oauth_auth_code(
+            req, 
+            client = traktClient,
+            redirect_uri = "http://localhost:43451",
+            auth_url = "https://trakt.tv/oauth/authorize"
+        )
+    }
+
+
 
 source("getMyRatings.R")
 source('getTraktHistory.R')
@@ -78,11 +88,12 @@ accessCode <- traktToken$access_token
 print(str_glue("Access code: {accessCode}"))
 
 print('Getting ratings')
-ratings <- getMyRatings(refresh = F, accessCode)
+ratings <- getMyRatings(refresh = T, accessCode)
 print('Got ratings, getting history')
 history <- getTraktHistory(refresh = F, accessCode)
 print('Got history, getting banners')
 images <- getBanners(refresh = F)
+
 print('Got banners')
 
 showList <- history %>% 
@@ -166,7 +177,9 @@ ui <- material_page(
                         label = "Choose show",
                         color = "DEEP_ORANGE",
                         choices = showList,
-                        selected = first(history$show)
+                        selected = ifelse(first(history$show) %in% showList, 
+                                          first(history$show),
+                                          first(showList))
                     )
                 )
             ),

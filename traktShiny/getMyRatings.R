@@ -7,9 +7,6 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
         token_url = "https://api.dropboxapi.com/oauth2/token",
         name = 'Rstudio_TC'
     )
-    dropboxToken <- readRDS('dropbox.rds')
-    
-    print(str_glue("Checking dropboxClient id ({dropboxClient$id}), token ({dropboxToken$refresh_token})"))
     
     require(tidyverse);require(lubridate);require(httr2)
     if (refresh) {
@@ -29,7 +26,8 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
         
         # Set info for GET request. 
         req2 <- req %>% 
-            req_auth_bearer_token(accessCode) %>%
+            reqAuthTrakt() %>% 
+            # req_auth_bearer_token(accessCode) %>%
             req_headers(
                 "trakt-api-key" = trakt_id,
                 "Content-Type" = "application/json",
@@ -72,8 +70,9 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
         write_csv(ratings, 'traktRatings.csv')
         
         reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-            req_oauth_refresh(client = dropboxClient, 
-                              refresh_token = dropboxToken$refresh_token) %>% 
+            reqAuthDropbox() %>% 
+            # req_oauth_refresh(client = dropboxClient, 
+                              # refresh_token = dropboxToken$refresh_token) %>% 
             # req_auth_bearer_token(dropboxToken$refresh_token) %>% 
             req_headers('Content-Type' = 'application/octet-stream') %>% 
             req_headers(
@@ -92,8 +91,9 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
         print("Downloading trakt ratings from Dropbox")
         
         reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
-            req_oauth_refresh(client = dropboxClient, 
-                              refresh_token = dropboxToken$refresh_token) %>% 
+            reqAuthDropbox() %>% 
+            # req_oauth_refresh(client = dropboxClient, 
+                              # refresh_token = dropboxToken$refresh_token) %>% 
             req_method('POST') %>%
             req_headers(
                 'Dropbox-API-Arg' = str_c('{',
