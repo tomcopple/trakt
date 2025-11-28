@@ -1,4 +1,4 @@
-getMyRatings <- function(refresh = TRUE, accessCode) {
+getMyRatings <- function(refresh = TRUE) {
     
     
     dropboxClient <- oauth_client(
@@ -21,7 +21,7 @@ getMyRatings <- function(refresh = TRUE, accessCode) {
         ))
         
         trakt_id <- Sys.getenv('TRAKTSHINY_ID')
-        print(str_glue("Checking trakt id: {trakt_id}, access code: {accessCode}"))
+        # print(str_glue("Checking trakt id: {trakt_id}, access code: {accessCode}"))
         
         
         # Set info for GET request. 
