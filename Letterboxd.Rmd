@@ -471,7 +471,7 @@ renderPlotly({
 Goodreads
 =====================================  
 
-Sidebar {.sidebar data-width=250}
+Sidebar {.sidebar data-width=150}
 -----------------------------------------------------------------------
 
 ```{r}
@@ -542,7 +542,7 @@ observeEvent(eventExpr = input$selectGrYear,
 
 ```
 
-C1 Gantt {data-width=650, data-height = 300}
+C1 Gantt {data-width=750}
 -----------------------------------------------------------------------
   
 ### Books finished this year 
@@ -581,9 +581,6 @@ renderPlot({
 
 ```
 
-C2 Cumulative {data-width=650, data-height = 300}
------------------------------------------------------------------------
-  
 ### Total books reads (target 52)
 
 ```{r}
