@@ -542,7 +542,7 @@ observeEvent(eventExpr = input$selectGrYear,
 
 ```
 
-C1 Gantt {data-width=650, data-height = 300}
+C1 Gantt {data-width=300, data-height = 600}
 -----------------------------------------------------------------------
   
 ### Books finished this year 
@@ -574,15 +574,16 @@ renderPlot({
                date_breaks = '2 months',
                date_labels = '%b',
                expand = c(0,0)) +
-    scale_color_discrete(name = 'Rating')
+    scale_color_discrete(name = 'Rating') +
+        theme(legend.position = 'bottom')
 
 })
 
 
 ```
 
-C2 Cumulative {data-width=650, data-height = 300}
------------------------------------------------------------------------
+<!-- C2 Cumulative {data-width=300, data-height = 600} -->
+<!-- ----------------------------------------------------------------------- -->
   
 ### Total books reads (target 52)
 
@@ -598,7 +599,8 @@ renderPlot({
         scale_linetype_manual(values = (c('solid', 'solid', 'dotted')))+
   theme(legend.title = element_blank()) +
     xlab(NULL) + ylab(NULL) +
-    theme(text = element_text(size = 16))
+    theme(text = element_text(size = 16),
+          legend.position = 'bottom')
 })
 ```
 
