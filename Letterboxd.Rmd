@@ -1,12 +1,14 @@
 ---
 title: "Letterboxd"
-output: 
+output:
   flexdashboard::flex_dashboard:
     orientation: rows
 vertical_layout: scroll
-editor_options: 
+editor_options:
   chunk_output_type: console
 runtime: shiny
+resource_files:
+- .Renviron
 ---
   
 
@@ -24,73 +26,47 @@ suppressPackageStartupMessages({
     library(scales)
 })
 
-readRenviron('.Renviron')
-print(Sys.getenv('DROPBOX_KEY'))
-
 ## New dropbox authentication process
-print(str_c('Checking system variables: ', Sys.getenv('DROPBOX_KEY')))
-dropboxClient <- oauth_client(
-    id = Sys.getenv('DROPBOX_KEY'),
-    secret = Sys.getenv('DROPBOX_SECRET'),
-    token_url = "https://api.dropboxapi.com/oauth2/token",
-    name = 'Rstudio_TC'
-)
+dropboxToken <- Sys.getenv('DROPBOX_TOKEN')
+print(str_c('Checking system variables: ', dropboxToken))
 
-# dropboxToken <- oauth_flow_auth_code(
-#     dropboxClient, port = 43451,
-#     auth_url = "https://www.dropbox.com/oauth2/authorize?token_access_type=offline"
-# )
-# saveRDS(dropboxToken, 'dropbox.RDS')
-dropboxToken <- readRDS('dropbox.RDS')
+## Download letterboxd diary from dropbox
+letReq <-  request("https://content.dropboxapi.com/2/files/download") %>% 
+    req_auth_bearer_token(dropboxToken) %>% 
+    req_method('POST') %>%
+    req_headers(
+        'Dropbox-API-Arg' = jsonlite::toJSON(
+            list(path="/R/trakt/letterboxd/diary.csv"),
+            auto_unbox = TRUE)
+        ) %>% 
+    req_perform()
 
-testing <- F
- 
-if (!testing) {
-    
-    ## Download letterboxd diary from dropbox
-  reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
-            req_oauth_refresh(client = dropboxClient, 
-                              refresh_token = dropboxToken$refresh_token) %>% 
-            req_method('POST') %>%
-            req_headers(
-                'Dropbox-API-Arg' = str_c('{',
-                                          '"path":"/R/trakt/letterboxd/diary.csv"',
-                                          '}')
-            )
-        
-        respDownload <- req_perform(reqDownload,
-                                    path = 'diary.csv')
-        
-        ## Then do the same for goodreads
-    reqDownload <-  request("https://content.dropboxapi.com/2/files/download") %>% 
-            req_oauth_refresh(client = dropboxClient, 
-                              refresh_token = dropboxToken$refresh_token) %>% 
-            req_method('POST') %>%
-            req_headers(
-                'Dropbox-API-Arg' = str_c('{',
-                                          '"path":"/R/goodreads/goodreads.csv"',
-                                          '}')
-            )
-        
-        respDownload <- req_perform(reqDownload,
-                                    path = 'goodreads.csv')
-}
-
-diary <- readr::read_csv('diary.csv', show_col_types = FALSE) %>% 
+writeBin(resp_body_raw(letReq), 'tempLet.csv')
+diary <- read_csv('tempLet.csv') %>% 
     select(title = Name, date = `Watched Date`, rating = Rating, tags = Tags) %>%
     arrange(desc(date))
+unlink('tempLet.csv')
 
-goodreads <- readr::read_csv('goodreads.csv', show_col_types = FALSE) %>%
+## Then do the same for goodreads
+goodReq <-  request("https://content.dropboxapi.com/2/files/download") %>% 
+    req_auth_bearer_token(dropboxToken) %>% 
+    req_method('POST') %>%
+    req_headers(
+        'Dropbox-API-Arg' = '{"path":"/R/goodreads/goodreads.csv"}'
+            ) %>% 
+    req_perform()
+        
+writeBin(resp_body_raw(goodReq), 'tempGood.csv')
+goodreads <- read_csv('tempGood.csv') %>%
     mutate(date_started= lubridate::ymd(date_started),
            date_finished =lubridate::ymd(date_finished)) %>% 
     mutate(author = ifelse(str_detect(author, ", "), 
                            str_c(str_extract(author, "(?<=, ).*$"), 
                                  str_extract(author, "^.*(?=, )"), sep = " "), 
                            author))
+unlink('tempGood.csv')
 
-
-
-## And get any new films from the RSS feed
+## And get any new films from the Letterboxd RSS feed
 letFeed <- xml2::read_xml("https://letterboxd.com/tomcopple/rss/") %>% 
   xml2::xml_find_all('//item') %>% 
   xml2::as_list() %>% 
@@ -105,60 +81,59 @@ letFeed <- xml2::read_xml("https://letterboxd.com/tomcopple/rss/") %>%
 
 let <- bind_rows(diary, letFeed) %>% arrange(desc(date))
 
-## Get any new books from Goodreads website
 ## NB from 2024 onwards get data from Hardcover API, not goodreads
 getHardcover <- function() {
     baseurl <- "https://api.hardcover.app/v1/graphql"
-token <- Sys.getenv('HARDCOVER_BEARER')
-
-req <- request(baseurl) %>% 
-    req_headers(
-        # `content-type` = "application/json",
-        Authorization = str_glue("Bearer {token}")
-    ) %>% 
-    req_body_json(list(
-        "query" = "query {
-        me {
-            user_books(
-                order_by: {last_read_date: desc_nulls_last}
-                where: {status_id: {_eq: 3}, last_read_date: {_gte: \"2024-01-01\"}}
-            ) {
-                book {
-                    contributions(limit: 1) {
-                        author {
-                            name
+    token <- Sys.getenv('HARDCOVER_BEARER')
+    
+    req <- request(baseurl) %>% 
+        req_headers(
+            # `content-type` = "application/json",
+            Authorization = str_glue("Bearer {token}")
+            ) %>% 
+        req_body_json(list(
+            "query" = "query {
+            me {
+                user_books(
+                    order_by: {last_read_date: desc_nulls_last}
+                    where: {status_id: {_eq: 3}, last_read_date: {_gte: \"2024-01-01\"}}
+                ) {
+                    book {
+                        contributions(limit: 1) {
+                            author {
+                                name
+                            }
+                        }
+                        title
+                    }
+                    user_book_reads {
+                        finished_at
+                        started_at
+                        user_book {
+                            rating
                         }
                     }
-                    title
-                }
-                user_book_reads {
-                    finished_at
-                    started_at
-                    user_book {
-                        rating
+                    user {
+                        id
                     }
                 }
-                user {
-                    id
-                }
-            }
-     }
+        }
         }"
     ))
 
-resp <- req_perform(req)
-cleanResp <- resp %>% 
-    resp_body_json(simplifyVector = T) %>% 
-    pluck('data', 'me', 'user_books', 1) %>% 
-    unnest(c('book', 'user_book_reads')) %>% 
-    unnest(c('contributions', 'user_book')) %>% 
-    unnest('author') %>% 
-    select(author = 1, title = 2, date_finished = 3, date_started = 4, rating = 5) %>%
-    mutate(date_finished = lubridate::ymd(date_finished),
-           date_started = lubridate::ymd(date_started)) %>% 
-    distinct()
-
-return(cleanResp)
+    resp <- req_perform(req)
+    cleanResp <- resp %>% 
+        resp_body_json(simplifyVector = T) %>% 
+        pluck('data', 'me', 'user_books', 1) %>% 
+        unnest(c('book', 'user_book_reads')) %>% 
+        unnest(c('contributions', 'user_book')) %>% 
+        unnest('author') %>% 
+        select(author = 1, title = 2, date_finished = 3, date_started = 4, rating = 5) %>%
+        mutate(date_finished = lubridate::ymd(date_finished),
+               date_started = lubridate::ymd(date_started)) %>% 
+        distinct()
+    
+    return(cleanResp)
 }
 
 newGoodreads <- getHardcover()
@@ -202,8 +177,7 @@ observeEvent(eventExpr = input$apply,
                file.rename(from = input$uploadFile$datapath, to = 'diary.csv')
                
                reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-                   req_oauth_refresh(client = dropboxClient, 
-                                     refresh_token = rv$dropboxToken$refresh_token) %>% 
+                   req_auth_bearer_token(dropboxToken) %>% 
                    req_headers('Content-Type' = 'application/octet-stream') %>% 
                    req_headers(
                        'Dropbox-API-Arg' = str_c('{',
@@ -472,7 +446,7 @@ Goodreads
 =====================================  
 
 Sidebar {.sidebar data-width=250}
------------------------------------------------------------------------
+--------------------------------------------------------------------
 
 ```{r}
 actionButton(inputId = 'refreshGoodreads', label = "Refresh", icon('refresh'))
@@ -493,8 +467,7 @@ observeEvent(eventExpr = input$refreshGoodreads,
                  write_csv(goodreads, 'goodreads.csv')
                  
                  reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-                   req_oauth_refresh(client = dropboxClient, 
-                                     refresh_token = rv$dropboxToken$refresh_token) %>% 
+                     req_auth_bearer_token(dropboxToken) %>% 
                    req_headers('Content-Type' = 'application/octet-stream') %>% 
                    req_headers(
                        'Dropbox-API-Arg' = str_c('{',
@@ -542,7 +515,7 @@ observeEvent(eventExpr = input$selectGrYear,
 
 ```
 
-C1 Gantt {data-width=300, data-height = 600}
+C1 Gantt {data-width=250, data-height = 600}
 -----------------------------------------------------------------------
   
 ### Books finished this year 
@@ -582,9 +555,8 @@ renderPlot({
 
 ```
 
-<!-- C2 Cumulative {data-width=300, data-height = 600} -->
-<!-- ----------------------------------------------------------------------- -->
-  
+C2 Cumulative {data-width=250, data-height = 600}
+
 ### Total books reads (target 52)
 
 ```{r}
