@@ -1,6 +1,8 @@
 ## Download all trakt scrobbles, and save local copy
 
-getTraktHistory <- function(refresh = TRUE, accessCode) {
+getTraktHistory <- function(refresh = TRUE) {
+    
+    library(httr2)
     
     dropboxClient <- oauth_client(
         id = Sys.getenv('DROPBOX_KEY'),

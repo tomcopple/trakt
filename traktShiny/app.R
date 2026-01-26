@@ -83,14 +83,14 @@ source("getMyRatings.R")
 source('getTraktHistory.R')
 source('getBanners.R')
 
-accessCode <- traktToken$access_token
+# accessCode <- traktToken$access_token
 
-print(str_glue("Access code: {accessCode}"))
+# print(str_glue("Access code: {accessCode}"))
 
 print('Getting ratings')
-ratings <- getMyRatings(refresh = T, accessCode)
+ratings <- getMyRatings(refresh = F)
 print('Got ratings, getting history')
-history <- getTraktHistory(refresh = F, accessCode)
+history <- getTraktHistory(refresh = F)
 print('Got history, getting banners')
 images <- getBanners(refresh = F)
 
@@ -237,8 +237,8 @@ server <- function(input, output, session) {
             material_spinner_show(session, 'showPlot')
             material_spinner_show(session, 'ratingsPlot')
             shiny::showNotification("Refreshing data, may take some time...", type = "default")
-            values$ratings <- getMyRatings(refresh = TRUE, accessCode)
-            values$history <- getTraktHistory(refresh = TRUE, accessCode)
+            values$ratings <- getMyRatings(refresh = TRUE)
+            values$history <- getTraktHistory(refresh = TRUE)
             shiny::showNotification("Done!", type = "message")
             material_spinner_hide(session, "showPlot")
             material_spinner_hide(session, "ratingsPlot")
