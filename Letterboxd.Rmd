@@ -24,47 +24,88 @@ suppressPackageStartupMessages({
     library(zoo)
     library(rvest)  
     library(scales)
+    library(jsonlite)
 })
 
-## New dropbox authentication process
-dropboxToken <- Sys.getenv('DROPBOX_TOKEN')
-print(str_c('Checking system variables: ', dropboxToken))
+readRenviron('.Renviron')
 
-## Download letterboxd diary from dropbox
-letReq <-  request("https://content.dropboxapi.com/2/files/download") %>% 
-    req_auth_bearer_token(dropboxToken) %>% 
-    req_method('POST') %>%
-    req_headers(
-        'Dropbox-API-Arg' = jsonlite::toJSON(
-            list(path="/R/trakt/letterboxd/diary.csv"),
-            auto_unbox = TRUE)
-        ) %>% 
-    req_perform()
+print(getwd())
+options(shiny.autoreload=TRUE)
 
-writeBin(resp_body_raw(letReq), 'tempLet.csv')
-diary <- read_csv('tempLet.csv') %>% 
-    select(title = Name, date = `Watched Date`, rating = Rating, tags = Tags) %>%
+# New dropbox authentication process ----
+app_key <- Sys.getenv("DROPBOX_KEY")
+app_secret <- Sys.getenv("DROPBOX_SECRET")
+
+dropbox_token <- readRDS('dropbox_token.rds')
+
+dropbox_client <- oauth_client(
+    id = app_key,
+    secret = app_secret,
+    token_url = "https://api.dropbox.com/oauth2/token",
+    name = "RStudio_TC"
+)
+
+# ===== DROPBOX API FUNCTIONS =====
+# Base request with authentication
+dropbox_request <- function(endpoint, api_type = "api") {
+    base_url <- switch(api_type,
+                       "api" = "https://api.dropboxapi.com/2",
+                       "content" = "https://content.dropboxapi.com/2",
+                       stop("Invalid api_type")
+    )
+    
+    request(base_url) |>
+        req_url_path_append(endpoint) |>
+        req_oauth_refresh(
+            client = dropbox_client,
+            refresh_token = dropbox_token$refresh_token
+        )
+}
+# Download a file from Dropbox
+download_dropbox_file <- function(dropbox_path) {
+    resp <- dropbox_request("/files/download", api_type = "content") |>
+        req_headers(
+            `Dropbox-API-Arg` = toJSON(list(path = dropbox_path), auto_unbox = TRUE)
+        ) |>
+        req_perform()
+    
+    
+    read_csv(rawToChar(resp_body_raw(resp)))
+}
+# Upload a file to Dropbox
+upload_dropbox_file <- function(local_path, dropbox_path, mode = "add") {
+    file_content <- readBin(local_path, "raw", file.info(local_path)$size)
+    
+    resp <- dropbox_request("/files/upload", api_type = "content") |>
+        req_headers(
+            `Dropbox-API-Arg` = toJSON(list(
+                path = dropbox_path,
+                mode = mode,
+                autorename = FALSE,
+                mute = FALSE
+            ), auto_unbox = TRUE),
+            `Content-Type` = "application/octet-stream"
+        ) |>
+        req_body_raw(file_content) |>
+        req_perform()
+    
+    resp_body_json(resp)
+}
+
+diary <- download_dropbox_file("/R/trakt/letterboxd/diary.csv") %>%
+    select(title = Name, 
+           date = `Watched Date`, 
+           rating = Rating, 
+           tags = Tags) %>%
     arrange(desc(date))
-unlink('tempLet.csv')
 
-## Then do the same for goodreads
-goodReq <-  request("https://content.dropboxapi.com/2/files/download") %>% 
-    req_auth_bearer_token(dropboxToken) %>% 
-    req_method('POST') %>%
-    req_headers(
-        'Dropbox-API-Arg' = '{"path":"/R/goodreads/goodreads.csv"}'
-            ) %>% 
-    req_perform()
-        
-writeBin(resp_body_raw(goodReq), 'tempGood.csv')
-goodreads <- read_csv('tempGood.csv') %>%
+goodreads <- download_dropbox_file("/R/goodreads/goodreads.csv") %>% 
     mutate(date_started= lubridate::ymd(date_started),
            date_finished =lubridate::ymd(date_finished)) %>% 
     mutate(author = ifelse(str_detect(author, ", "), 
                            str_c(str_extract(author, "(?<=, ).*$"), 
                                  str_extract(author, "^.*(?=, )"), sep = " "), 
                            author))
-unlink('tempGood.csv')
 
 ## And get any new films from the Letterboxd RSS feed
 letFeed <- xml2::read_xml("https://letterboxd.com/tomcopple/rss/") %>% 
@@ -158,40 +199,36 @@ fileInput(inputId = 'uploadFile',
 actionButton(inputId = "apply", label = "Apply", icon = icon("play"))
 
 rv <- reactiveValues(let = let)
-rv$dropboxToken <- dropboxToken
 
 # reactive({print(head(rv$let))})
 
-observeEvent(eventExpr = input$apply,
-             handlerExpr = {
-               req(input$uploadFile) 
-               print(input$uploadFile$datapath)
-               
-               newData <- read.csv(input$uploadFile$datapath) %>% 
-                 select(title = Name, date = Watched.Date, rating = Rating, tags = Tags) %>% 
-                 mutate(date = lubridate::ymd(date)) %>% 
-                 arrange(desc(date))
-               rv$let <- bind_rows(newData, rv$let %>% 
-                                     anti_join(newData, by = c('title', 'date', 'rating')))
-               
-               file.rename(from = input$uploadFile$datapath, to = 'diary.csv')
-               
-               reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-                   req_auth_bearer_token(dropboxToken) %>% 
-                   req_headers('Content-Type' = 'application/octet-stream') %>% 
-                   req_headers(
-                       'Dropbox-API-Arg' = str_c('{',
-                                          '"autorename":false,',
-                                          '"mode":"overwrite",',
-                                          '"path":"/R/trakt/letterboxd/diary.csv",',
-                                          '"strict_conflict":false', 
-                                          '}')
-                       ) %>% 
-                   req_body_file(path = 'diary.csv')
-               
-               respUpload <- req_perform(reqUpload)
-               
-             }, ignoreNULL = FALSE)
+observeEvent(
+    eventExpr = input$apply,
+    handlerExpr = {
+        req(input$uploadFile)
+        print(input$uploadFile$datapath)
+        
+        newData <- read_csv(input$uploadFile$datapath) %>%
+            select(
+                title = Name,
+                date = Watched.Date,
+                rating = Rating,
+                tags = Tags
+            ) %>%
+            mutate(date = lubridate::ymd(date)) %>%
+            arrange(desc(date))
+        rv$let <- bind_rows(newData, rv$let %>%
+                                anti_join(newData, by = c('title', 'date', 'rating')))
+        
+        # file.rename(from = input$uploadFile$datapath, to = 'diary.csv')
+        
+        upload_dropbox_file(input$uploadFile$datapath,
+                            "/R/trakt/letterboxd/diary.csv",
+                            "overwrite")
+        
+    },
+    ignoreNULL = FALSE
+)
 
 ```
 
@@ -450,68 +487,66 @@ Sidebar {.sidebar data-width=250}
 
 ```{r}
 actionButton(inputId = 'refreshGoodreads', label = "Refresh", icon('refresh'))
-             
+
 rv$goodreads <- goodreads %>% filter(year(date_finished) >= 2011)
 
 # reactive({print(head(rv$let))})
 
-observeEvent(eventExpr = input$refreshGoodreads,
-             handlerExpr = {
-                 newGoodreads <- getHardcover()
-                 rv$goodreads <- bind_rows(
-                     filter(goodreads, date_finished < "2024-01-01"),
-                     newGoodreads) %>% distinct() %>% 
-                     arrange(desc(date_finished)) %>% 
-                     filter(year(date_finished) >= 2011)
-                 
-                 write_csv(goodreads, 'goodreads.csv')
-                 
-                 reqUpload <- request('https://content.dropboxapi.com/2/files/upload/') %>% 
-                     req_auth_bearer_token(dropboxToken) %>% 
-                   req_headers('Content-Type' = 'application/octet-stream') %>% 
-                   req_headers(
-                       'Dropbox-API-Arg' = str_c('{',
-                                          '"autorename":false,',
-                                          '"mode":"overwrite",',
-                                          '"path":"/R/goodreads/goodreads.csv",',
-                                          '"strict_conflict":false', 
-                                          '}')
-                       ) %>% 
-                   req_body_file(path = 'goodreads.csv')
-               
-               respUpload <- req_perform(reqUpload)
-               
-                 
-               }, ignoreNULL = FALSE, ignoreInit = TRUE)
+observeEvent(
+    eventExpr = input$refreshGoodreads,
+    handlerExpr = {
+        newGoodreads <- getHardcover()
+        rv$goodreads <- bind_rows(filter(goodreads, date_finished < "2024-01-01"),
+                                  newGoodreads) %>% distinct() %>%
+            arrange(desc(date_finished)) %>%
+            filter(year(date_finished) >= 2011)
+        
+        temp_file <- tempfile(fileext = ".csv")
+        write_csv(goodreads, temp_file)
+        upload_dropbox_file(temp_file, "/R/goodreads/goodreads.csv", "overwrite")
+        unlink(temp_file)
+    },
+    ignoreNULL = FALSE,
+    ignoreInit = TRUE
+)
 
 
-radioButtons(inputId = 'selectGrYear', label = "Select time period",
-             choices = c(2011:year(max(goodreads$date_finished, na.rm = T))), 
-             selected = year(max(goodreads$date_finished, na.rm=T)))
+radioButtons(
+    inputId = 'selectGrYear',
+    label = "Select time period",
+    choices = c(2011:year(max(
+        goodreads$date_finished, na.rm = T
+    ))),
+    selected = year(max(goodreads$date_finished, na.rm = T))
+)
 
-observeEvent(eventExpr = input$selectGrYear,
-             handlerExpr = {
-               print(input$selectGrYear)
-                 rv$goodreadsC1 <- filter(rv$goodreads, 
-                                          year(date_finished) == as.numeric(input$selectGrYear))
-                 rv$goodreadsC2 <- rv$goodreadsC1 %>% 
-                   arrange(date_finished) %>% 
-                   mutate(weekDate = lubridate::floor_date(date_finished, unit = 'weeks')) %>% 
-                   count(weekDate) %>% 
-                   right_join(data.frame(weekDate = seq.Date(
-                     from = floor_date(lubridate::ymd(str_c(as.numeric(input$selectGrYear), "-01-01")), unit = 'weeks'),
-                     by = 'weeks', length.out = 52))) %>%
-                   arrange(weekDate) %>%
-                   mutate(n = replace_na(n, 0)) %>% 
-                   mutate(read = cumsum(n)) %>% 
-                   mutate(
-                       target = ifelse(weekDate <= today(), row_number(), NA),
-                       target2 = ifelse(weekDate >= today(), row_number(), NA)) %>% 
-                   select(-n) %>% 
-                     mutate(read = ifelse(weekDate >= lubridate::today(), NA, read)) %>% 
-                   gather(-weekDate, key = series, value = count)
-                 glimpse(rv$goodreadsC2)
-                 })
+observeEvent(eventExpr = input$selectGrYear, handlerExpr = {
+    print(input$selectGrYear)
+    rv$goodreadsC1 <- filter(rv$goodreads,
+                             year(date_finished) == as.numeric(input$selectGrYear))
+    rv$goodreadsC2 <- rv$goodreadsC1 %>%
+        arrange(date_finished) %>%
+        mutate(weekDate = lubridate::floor_date(date_finished, unit = 'weeks')) %>%
+        count(weekDate) %>%
+        right_join(data.frame(weekDate = seq.Date(
+            from = floor_date(lubridate::ymd(str_c(
+                as.numeric(input$selectGrYear), "-01-01"
+            )), unit = 'weeks'),
+            by = 'weeks',
+            length.out = 52
+        ))) %>%
+        arrange(weekDate) %>%
+        mutate(n = replace_na(n, 0)) %>%
+        mutate(read = cumsum(n)) %>%
+        mutate(
+            target = ifelse(weekDate <= today(), row_number(), NA),
+            target2 = ifelse(weekDate >= today(), row_number(), NA)
+        ) %>%
+        select(-n) %>%
+        mutate(read = ifelse(weekDate >= lubridate::today(), NA, read)) %>%
+        gather(-weekDate, key = series, value = count)
+    glimpse(rv$goodreadsC2)
+})
 
 ```
 
