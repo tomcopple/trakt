@@ -34,3 +34,4 @@ rsconnect
 token.RDS
 trakt.RDS
 dropbox_token.rds
+trakt_token.rds
