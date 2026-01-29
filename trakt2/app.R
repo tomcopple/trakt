@@ -1,10 +1,20 @@
 ## Second attempt to make a trakt shiny app with authentication
 ## Testing dropbox first
 
-library(shiny);library(tidyverse);library(httr2);library(jsonlite)
-library(shinymaterial);library(plotly);library(zoo);library(scales)
-# options(shiny.autoreload=TRUE)
 
+suppressMessages({
+    library(shiny)
+    library(tidyverse)
+    library(httr2)
+    library(jsonlite)
+    library(shinymaterial)
+    library(plotly)
+    library(zoo)
+    library(scales)    
+})
+
+# options(shiny.autoreload=TRUE)
+# setwd('trakt2')
 readRenviron(".Renviron")
 
 # ===== SETUP (runs once at app startup) =====
@@ -51,10 +61,11 @@ download_dropbox_file <- function(dropbox_path) {
         req_headers(
             `Dropbox-API-Arg` = toJSON(list(path = dropbox_path), auto_unbox = TRUE)
         ) |>
-        req_perform()
+        req_perform() %>% 
+        resp_body_raw()
     
     
-    read_csv(rawToChar(resp_body_raw(resp)))
+    read_csv(rawToChar(resp), show_col_types = FALSE)
 }
 # Upload a file to Dropbox
 upload_dropbox_file <- function(local_path, dropbox_path, mode = "add") {
@@ -103,110 +114,55 @@ trakt_client <- oauth_client(
     name = "Trakt2"
 )
 
-
-trakt_token <- readRDS('trakt_token.rds')
-
-## Basic trakt request
-trakt_request <- function(endpoint) {
-    request("https://api.trakt.tv") |>
-        req_url_path_append(endpoint) |>
-        req_oauth_refresh(
-            client = trakt_client,
-            refresh_token = trakt_token$refresh_token
-        ) |>
-        req_headers(
-            `Content-Type` = "application/json",
-            `trakt-api-version` = "2",
-            `trakt-api-key` = trakt_id
-        )
-}
-
-getTraktRatings <- function() {
-    
-    print("Getting trakt ratings")
-    
-    resp <- trakt_request('/users/tomcopple/ratings/episodes') %>% 
+refresh_trakt_token <- function(refresh_token) {
+    resp <- request("https://api.trakt.tv/oauth/token") |>
+        req_method("POST") |>
+        req_body_json(list(
+            refresh_token = refresh_token,
+            client_id = trakt_id,
+            client_secret = trakt_secret,
+            grant_type = "refresh_token"
+        )) |>
         req_perform()
     
-    ratings <- resp_body_json(resp) %>% 
-        map_df(function(x) {
-            df <- tibble(
-                date = x$rated_at,
-                rating = x$rating,
-                title = x$episode$title,
-                show = x$show$title,
-                season = x$episode$season,
-                episode = x$episode$number,
-                slug = x$show$ids$slug,
-                tvdb = x$show$ids$tvdb
+    token_data <- resp_body_json(resp)
+    
+    structure(
+        list(
+            access_token = token_data$access_token,
+            token_type = token_data$token_type,
+            expires_in = token_data$expires_in,
+            refresh_token = token_data$refresh_token,
+            scope = token_data$scope,
+            created_at = token_data$created_at,
+            expires_at = as.POSIXct(
+                token_data$created_at + token_data$expires_in, 
+                origin = "1970-01-01"
             )
-            return(df)
-        }) %>% 
-        mutate(date = ymd(str_sub(date, 1, 10)))
-    
-    ratings <- ratings %>% 
-        mutate(
-            episode = ifelse(show == "Archer" & season == 3,
-                             episode + 3, episode),
-            episode = ifelse(show == "Archer" & season == 0,
-                             episode - 3, episode),
-            season = ifelse(show == "Archer" & season == 0,
-                            3, season)
-        ) %>% 
-        ## Don't include specials
-        filter(season != 0) %>% 
-        ## And filter out shows with only one rating
-        group_by(show) %>% filter(n() > 1)
-    
-    temp_file <- tempfile(fileext = ".csv")
-    write_csv(ratings, temp_file)
-    print("Got ratings, uploading to Dropbox")
-    upload_dropbox_file(temp_file, "/R/trakt/traktRatings.csv", "overwrite")
-    unlink(temp_file)
-    print("Done with ratings!")
-    
-    return(ratings)
+        ),
+        class = "httr2_token"
+    )
 }
 
-getTraktHistory <- function() {
-    
-    print("Getting trakt history")
-    resp <- trakt_request("/users/tomcopple/history/episodes") %>% 
-        req_url_query(limit = 100000) %>% 
-        req_perform()
-    
-    history <- resp_body_json(resp) %>% 
-        map_df(function(x) {
-            df <- tibble(
-                date = x$watched_at,
-                id = x$id,
-                title = x$episode$title,
-                show = x$show$title,
-                season = x$episode$season,
-                episode = x$episode$number,
-                slug = x$show$ids$slug,
-                tvdb = x$show$ids$tvdb
-            )
-            return(df)
-        }) %>% 
-        mutate(date = ymd_hms(date)) %>% 
-        distinct() %>% 
-        filter(date(date) != '2015-08-30',
-               date(date) != '2015-05-01',
-               date(date) != '2015-06-18',
-               date(date) != '2015-06-16',
-               date(date) != '2011-08-29')
-    
-    temp_file <- tempfile(fileext = ".csv")
-    write_csv(history, temp_file)
-    print("Got history, uploading to Dropbox")
-    upload_dropbox_file(temp_file, "/R/trakt/traktHistory.csv", "overwrite")
-    unlink(temp_file)
-    
-    print("Done with history!")
-    
-    return(history)
-}
+## Can't save token locally as needs refreshing, save in Dropbox instead
+# trakt_token <- readRDS('trakt_token.rds')
+resp <- dropbox_request("files/download", api_type = "content") %>%
+    req_headers(
+        `Dropbox-API-Arg` = toJSON(list(path = "/R/trakt/trakt_token.rds"), auto_unbox = TRUE)
+    ) %>%
+    req_perform() %>%
+    resp_body_raw()
+
+temp_file <- tempfile(fileext = ".rds")
+writeBin(resp, temp_file)
+trakt_token <- readRDS(temp_file)
+unlink(temp_file)
+
+print(str_glue("Trakt refresh token: {trakt_token$refresh_token}"))
+
+## Moving trakt functions to server so they can be reactive
+
+
 
 # UI ----
 ui <- material_page(
@@ -368,6 +324,145 @@ server <- function(input, output, session) {
     values$ratings <- ratings
     values$history <- history
     values$images <- images
+    values$trakt_token <- trakt_token
+    
+    ## Basic trakt request (in server so reactive) ----
+    trakt_request <- function(endpoint) {
+        
+        token <- values$trakt_token
+        
+        print(str_glue("Trakt token expires in 
+                       {round(difftime(token$expires_at, Sys.time(), units = \"mins\"))}
+                       minutes"))
+        
+        ## Check if trakt token needs refreshing
+        needs_refresh <- is.null(token$expires_at) ||
+                                     (token$expires_at - as.numeric(Sys.time())) < 300
+        
+        print(str_glue("Token needs refreshing? {needs_refresh}"))
+        
+        if (needs_refresh) {
+            print("Trakt token needs refreshing")
+            
+            new_token <- refresh_trakt_token(token$refresh_token)
+            
+            temp_file <- tempfile(fileext = ".rds")
+            saveRDS(new_token, temp_file)
+            upload_dropbox_file(temp_file, "/R/trakt/trakt_token.rds", "overwrite")
+            unlink(temp_file)
+            
+            values$trakt_token <- new_token
+            token <- new_token
+                
+        }
+        
+        ## Checking trakt authentication
+        print(str_glue("Trakt access code: {token$access_token}"))
+        
+        req <- request("https://api.trakt.tv") |>
+            req_url_path_append(endpoint) |>
+            # req_auth_bearer_token(token$access_token) %>% 
+            # req_oauth_refresh(
+                # client = trakt_client,
+                # refresh_token = trakt_token$refresh_token
+            # ) |>
+            req_headers(
+                Authorization = paste("Bearer", token$access_token),
+                `Content-Type` = "application/json",
+                `trakt-api-version` = "2",
+                `trakt-api-key` = trakt_id
+            )
+        
+        print(req)
+        return(req)
+    }
+    
+    getTraktRatings <- function() {
+        
+        print("Getting trakt ratings")
+        
+        resp <- trakt_request('/users/tomcopple/ratings/episodes') %>% 
+            req_perform()
+        
+        ratings <- resp_body_json(resp) %>% 
+            map_df(function(x) {
+                df <- tibble(
+                    date = x$rated_at,
+                    rating = x$rating,
+                    title = x$episode$title,
+                    show = x$show$title,
+                    season = x$episode$season,
+                    episode = x$episode$number,
+                    slug = x$show$ids$slug,
+                    tvdb = x$show$ids$tvdb
+                )
+                return(df)
+            }) %>% 
+            mutate(date = ymd(str_sub(date, 1, 10)))
+        
+        ratings <- ratings %>% 
+            mutate(
+                episode = ifelse(show == "Archer" & season == 3,
+                                 episode + 3, episode),
+                episode = ifelse(show == "Archer" & season == 0,
+                                 episode - 3, episode),
+                season = ifelse(show == "Archer" & season == 0,
+                                3, season)
+            ) %>% 
+            ## Don't include specials
+            filter(season != 0) %>% 
+            ## And filter out shows with only one rating
+            group_by(show) %>% filter(n() > 1)
+        
+        temp_file <- tempfile(fileext = ".csv")
+        write_csv(ratings, temp_file)
+        print("Got ratings, uploading to Dropbox")
+        upload_dropbox_file(temp_file, "/R/trakt/traktRatings.csv", "overwrite")
+        unlink(temp_file)
+        print("Done with ratings!")
+        
+        return(ratings)
+    }
+    
+    getTraktHistory <- function() {
+        
+        print("Getting trakt history")
+        resp <- trakt_request("/users/tomcopple/history/episodes") %>% 
+            req_url_query(limit = 100000) %>% 
+            req_perform()
+        
+        history <- resp_body_json(resp) %>% 
+            map_df(function(x) {
+                df <- tibble(
+                    date = x$watched_at,
+                    id = x$id,
+                    title = x$episode$title,
+                    show = x$show$title,
+                    season = x$episode$season,
+                    episode = x$episode$number,
+                    slug = x$show$ids$slug,
+                    tvdb = x$show$ids$tvdb
+                )
+                return(df)
+            }) %>% 
+            mutate(date = ymd_hms(date)) %>% 
+            distinct() %>% 
+            filter(date(date) != '2015-08-30',
+                   date(date) != '2015-05-01',
+                   date(date) != '2015-06-18',
+                   date(date) != '2015-06-16',
+                   date(date) != '2011-08-29')
+        
+        temp_file <- tempfile(fileext = ".csv")
+        write_csv(history, temp_file)
+        print("Got history, uploading to Dropbox")
+        upload_dropbox_file(temp_file, "/R/trakt/traktHistory.csv", "overwrite")
+        unlink(temp_file)
+        
+        print("Done with history!")
+        
+        return(history)
+    }
     
     ## Maintenance: Refresh Trakt ----
     observeEvent(input$refresh, {
