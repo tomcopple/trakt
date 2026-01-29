@@ -13,10 +13,7 @@
 .Renviron
 *.csv
 .DS_Store
-dropbox.rds
 Letterboxd.html
 rsconnect
-token.RDS
-trakt.RDS
-dropbox_token.rds
-trakt_token.rds
+*.rds
+*.RDS
